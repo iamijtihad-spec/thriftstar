@@ -666,9 +666,9 @@ st.markdown("*The premier marketplace for thrifters to buy, sell, and **SWAP**.*
 # Sidebar
 with st.sidebar:
     st.divider()
-    if URI_BG:
-        st.markdown(
-            f'<img src="{URI_BG}" style="width:60%;margin:0 auto;display:block;opacity:0.8;border-radius:12px;"/>',
+    if URI_VEND:
+        st.sidebar.markdown(
+            f'<div style="text-align:center;"><img src="{URI_VEND}" style="width:110px; opacity:0.9; margin-bottom:0.8rem;"/></div>',
             unsafe_allow_html=True
         )
     st.divider()
