@@ -524,22 +524,29 @@ def logout():
         st.session_state[k] = None
 
 
-# ==========================================
-# DATABASE / API HELPERS
-# ==========================================
 def get_user_by_id(user_id):
     res = supabase.table("users").select("*").eq("id", user_id).execute()
     return res.data[0] if res.data else None
 
-def process_sandbox_payment(amount):
+def get_braintree_client_token():
+    if not braintree_configured:
+        return None
+    try:
+        return gateway.client_token.generate()
+    except Exception:
+        return None
+
+def process_braintree_transaction(amount, nonce):
     if not braintree_configured:
         return False, "Braintree gateway not configured."
     result = gateway.transaction.sale({
         "amount": f"{amount:.2f}",
-        "payment_method_nonce": "fake-valid-nonce",
+        "payment_method_nonce": nonce,
         "options": {"submit_for_settlement": True}
     })
-    return (True, result.transaction.id) if result.is_success else (False, result.message)
+    if result.is_success:
+        return True, result.transaction.id
+    return False, result.message
 
 def create_shipping_label(sender_id, receiver_id):
     if not shippo_configured:
@@ -763,28 +770,71 @@ def render_checkout_page(item):
             st.markdown(f"ThriftStar Fee (10%): **${app_fee:.2f}**")
             st.divider()
             st.markdown(f"## Total: ${total:.2f}")
-            st.radio("Payment Method", ["PayPal", "Credit Card / Debit Card"])
-            if st.button("Complete Purchase", type="primary"):
-                addr = me_data.get('address')
-                if not addr or not addr.get("street1"):
-                    st.error("Please add a Shipping Address in Profile & Settings first!")
-                else:
-                    with st.spinner("Processing..."):
-                        success, txn = process_sandbox_payment(total)
-                        if success:
-                            supabase.table("orders").insert({
-                                "buyer_id":        ME_ID,
-                                "seller_id":       item["owner_id"],
-                                "item_id":         item["id"],
-                                "amount":          total,
-                                "braintree_txn_id": txn
-                            }).execute()
-                            supabase.table("items").update({"status": "Sold"}).eq("id", item["id"]).execute()
-                            supabase.table("cart_items").delete().eq("item_id", item["id"]).execute()
-                            st.session_state.checkout_item = None
-                            st.rerun()
+            method = st.radio("Payment Method", ["PayPal / Credit Card"])
+            
+            # --- BRAINTREE DROP-IN INTEGRATION ---
+            token = get_braintree_client_token()
+            if not token:
+                st.error("Payment Gateway unreachable. Please try again later.")
+            else:
+                # Capture nonce from Query Params (Set by JS below)
+                captured_nonce = st.query_params.get("payment_nonce")
+                
+                if captured_nonce:
+                    st.success("✅ Payment Method Verified. Click 'Complete Purchase' below.")
+                    if st.button("Complete Purchase", type="primary"):
+                        addr = me_data.get('address')
+                        if not addr or not addr.get("street1"):
+                            st.error("Please add a Shipping Address in Profile & Settings first!")
                         else:
-                            st.error(f"Payment Failed: {txn}")
+                            with st.spinner("Finalizing Order..."):
+                                success, txn = process_braintree_transaction(total, captured_nonce)
+                                if success:
+                                    # Cleanup nonce from URL after use
+                                    st.query_params.clear()
+                                    supabase.table("orders").insert({
+                                        "buyer_id":        ME_ID,
+                                        "seller_id":       item["owner_id"],
+                                        "item_id":         item["id"],
+                                        "amount":          total,
+                                        "braintree_txn_id": txn
+                                    }).execute()
+                                    supabase.table("items").update({"status": "Sold"}).eq("id", item["id"]).execute()
+                                    supabase.table("cart_items").delete().eq("item_id", item["id"]).execute()
+                                    st.success("HUSTLE SUCCESSFUL! Order placed. 🛍️")
+                                    st.session_state.checkout_item = None
+                                    st.rerun()
+                                else:
+                                    st.error(f"Transaction Error: {txn}")
+                else:
+                    # Render Drop-in UI
+                    from streamlit.components.v1 import html as st_html
+                    dropin_html = f"""
+                    <script src="https://js.braintreegateway.com/web/dropin/1.42.0/js/dropin.min.js"></script>
+                    <div id="dropin-container"></div>
+                    <button id="submit-button" style="background:#F5A623; color:white; border:none; padding:10px 20px; border-radius:20px; font-family:sans-serif; cursor:pointer; width:100%; font-weight:bold; margin-top:10px;">VERIFY PAYMENT METHOD</button>
+                    <script>
+                        const button = document.querySelector('#submit-button');
+                        braintree.dropin.create({{
+                            authorization: '{token}',
+                            container: '#dropin-container',
+                            paypal: {{ flow: 'vault' }}
+                        }}, (error, instance) => {{
+                            if (error) console.error(error);
+                            button.addEventListener('click', () => {{
+                                instance.requestPaymentMethod((error, payload) => {{
+                                    if (error) console.error(error);
+                                    // Hack: Post nonce back to parent via URL
+                                    const url = new URL(window.parent.location.href);
+                                    url.searchParams.set('payment_nonce', payload.nonce);
+                                    window.parent.location.href = url.href;
+                                }});
+                            }});
+                        }});
+                    </script>
+                    """
+                    st_html(dropin_html, height=450)
+                    st.caption("Verify your PayPal or Card above to enable 'Complete Purchase'.")
 
 if st.session_state.view_item is not None:
     render_isolated_item_page(st.session_state.view_item)
@@ -901,7 +951,7 @@ elif choice == "Shopping Cart":
                 st.error("Please add a Shipping Address in Profile & Settings before checking out.")
             else:
                 with st.spinner("Authorizing..."):
-                    success, txn = process_sandbox_payment(total_price)
+                    success, txn = process_braintree_transaction(total_price, "fake-valid-nonce")
                     if success:
                         for c in cart_items:
                             item = c['items']
@@ -1006,7 +1056,7 @@ elif choice == "Negotiations & Offers":
                                 update_payload    = {"status": "Accepted", "action_with_id": None}
                                 payment_successful = True
                                 if p.get('cash_added', 0) > 0:
-                                    pay_success, pay_result = process_sandbox_payment(float(p['cash_added']))
+                                    pay_success, pay_result = process_braintree_transaction(float(p['cash_added']), "fake-valid-nonce")
                                     if pay_success:
                                         update_payload["braintree_txn_id"] = pay_result
                                     else:
