@@ -925,12 +925,6 @@ elif choice == "Negotiations & Offers":
     hc1, hc2 = st.columns([6, 1])
     with hc1:
         st.markdown("<h2 style='margin-bottom:0;'>NEGOTIATIONS & OFFERS</h2>", unsafe_allow_html=True)
-    with hc2:
-        if URI_BAD:
-            st.markdown(
-                f'<img src="{URI_BAD}" style="height:64px;opacity:0.5;"/>',
-                unsafe_allow_html=True
-            )
     prop_res = supabase.table("swap_proposals") \
         .select("*") \
         .or_(f"original_proposer_id.eq.{ME_ID},original_receiver_id.eq.{ME_ID}") \
