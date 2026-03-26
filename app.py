@@ -107,7 +107,7 @@ def empty_state(img_uri, title, subtitle):
     """, unsafe_allow_html=True)
 
 
-# --- PREMIUM UI DESIGN SYSTEM ---
+# --- PREMIUM UI DESIGN SYSTEM --# --- PREMIUM UI DESIGN SYSTEM ---
 st.html("""
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -121,25 +121,28 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
 [data-testid="block-container"] { padding-top: 1.5rem !important; }
 
 /* Hide Streamlit chrome */
-#MainMenu, footer, [data-testid="stToolbar"],
-[data-testid="stDecoration"], [data-testid="stStatusWidget"],
-header[data-testid="stHeader"] { visibility: hidden !important; height: 0 !important; }
+#MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], header[data-testid="stHeader"] {
+    visibility: hidden !important;
+    height: 0 !important;
+}
 
-/* Sidebar */
+/* Sidebar (Clean Mini) */
 [data-testid="stSidebar"] {
-    background: #111114 !important;
-    border-right: 1px solid #2A2A30 !important;
+    background: #F7F7F7 !important;
+    border-right: 1px solid #EAEAEA !important;
 }
-[data-testid="stSidebar"] * { color: #F0F0F0 !important; }
-[data-testid="stSidebar"] .stRadio label {
-    font-family: 'Inter', sans-serif !important;
-    font-size: 0.9rem !important;
-    font-weight: 500 !important;
-    padding: 0.35rem 0 !important;
-    transition: color 0.2s;
+[data-testid="stSidebar"] * { color: #1A1A1C !important; }
+[data-testid="stSidebarNav"] { padding-top: 1rem !important; }
+[data-testid="stSidebar"] hr { border-color: #EAEAEA !important; }
+
+/* Global Spinner Polish */
+[data-testid="stSpinner"] {
+    display: flex;
+    justify-content: center;
+    padding: 2rem;
 }
-[data-testid="stSidebar"] .stRadio label:hover { color: #F5A623 !important; }
-[data-testid="stSidebar"] hr { border-color: #2A2A30 !important; }
+[data-testid="stSpinner"] > div { border-top-color: #F5A623 !important; }
+}
 
 /* Headings */
 h1 {
@@ -669,13 +672,8 @@ with st.sidebar:
             unsafe_allow_html=True
         )
     st.divider()
-    # Sketch art in sidebar
-    for uri in [URI_BAD, URI_DOME]:
-        if uri:
-            st.markdown(
-                f'<img src="{uri}" style="width:100%;opacity:0.45;margin-bottom:0.4rem;"/>',
-                unsafe_allow_html=True
-            )
+    # Side art removed (as per user request: 'remove tacky sidebar sketches')
+    pass
 
 menu   = ["Home Feed", "Shopping Cart", "Negotiations & Offers", "My Closet", "Purchases & Sales", "Profile & Settings"]
 choice = st.sidebar.radio("Navigation", menu)
@@ -807,11 +805,8 @@ if choice == "Home Feed":
     with hcol1:
         st.markdown("<h2 style='margin-bottom:0;'>DISCOVER STEALS</h2>", unsafe_allow_html=True)
     with hcol2:
-        if URI_BURGER:
-            st.markdown(
-                f'<img src="{URI_BURGER}" style="height:72px;opacity:0.9;filter:sepia(1) saturate(8) hue-rotate(5deg);"/>',
-                unsafe_allow_html=True
-            )
+        # Lighter sketch removed (as per user request)
+        pass
     feed = get_feed_items()
     if not feed:
         empty_state(URI_SHOE, "The feed is empty.", "Be the first to list some heat. 👟")
