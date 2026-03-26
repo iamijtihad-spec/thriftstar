@@ -231,7 +231,98 @@ details summary { color: #F5A623 !important; font-weight: 600 !important; }
 [data-testid="stFileUploaderDropzone"] {
     background: #1A1A1C !important; border: 1px dashed #2A2A30 !important; border-radius: 10px !important;
 }
-</style>
+/* Grailed-style item cards */
+.grailed-card {
+    position: relative;
+    background: #111114;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #222;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+    margin-bottom: 1rem;
+}
+.grailed-card:hover {
+    transform: translateY(-4px);
+    border-color: #F5A623;
+    box-shadow: 0 8px 30px rgba(245,166,35,0.2);
+}
+.grailed-card img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    display: block;
+    border-radius: 0;
+}
+.grailed-card .card-info {
+    padding: 0.6rem 0.75rem 0.75rem;
+}
+.grailed-card .card-brand {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 1.5px;
+    color: #F0F0F0;
+    line-height: 1.1;
+}
+.grailed-card .card-title {
+    font-size: 0.75rem;
+    color: #888;
+    margin: 0.15rem 0 0.4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.grailed-card .card-price {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    color: #F5A623;
+    letter-spacing: 1px;
+}
+
+/* Hero graphic (login wall) */
+.hero-graphic {
+    display: flex;
+    justify-content: center;
+    margin: 0.5rem 0 1.5rem;
+    transition: transform 0.3s ease;
+}
+.hero-graphic img {
+    max-width: 320px;
+    filter: drop-shadow(0 0 20px rgba(245,166,35,0.15));
+    transition: filter 0.3s ease, transform 0.3s ease;
+}
+.hero-graphic:hover img {
+    filter: drop-shadow(0 0 35px rgba(245,166,35,0.4));
+    transform: scale(1.03);
+}
+
+/* Empty state */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: #555;
+}
+.empty-state img {
+    max-width: 140px;
+    margin-bottom: 1rem;
+    opacity: 0.6;
+    filter: invert(1);
+}
+.empty-state h3 { color: #666 !important; font-size: 1rem !important; }
+.empty-state p { color: #444 !important; font-size: 0.85rem !important; }
+
+/* Burger divider */
+.burger-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 0.5rem 0;
+}
+.burger-divider img { height: 28px; opacity: 0.35; filter: invert(1); }
+.burger-divider hr { flex: 1; border-color: #2A2A30; margin: 0; }
 """, unsafe_allow_html=True)
 
 
@@ -396,12 +487,17 @@ def get_img_b64(path):
         return ""
 
 if st.session_state.user is None:
-    banner_b64 = get_img_b64("banner.png")
-    if banner_b64:
-        st.markdown(f'<img src="data:image/png;base64,{banner_b64}" style="width:100%;border-radius:16px;margin-bottom:1rem;"/>', unsafe_allow_html=True)
-    else:
-        st.markdown("<h1 style='text-align:center;font-family:Bebas Neue,sans-serif;letter-spacing:4px;color:#F5A623;'>⭐ THRIFT STAR</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;color:#888;margin-bottom:1.5rem;'>The premier marketplace to buy, sell & swap streetwear.</p>", unsafe_allow_html=True)
+    _vend_b64 = get_img_b64("sketch_blunt_vending_machine_2.png")
+    # Logo
+    st.markdown("<h1 style='text-align:center;font-family:Bebas Neue,sans-serif;letter-spacing:6px;color:#F5A623;margin-bottom:0;'>⭐ THRIFT STAR</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;color:#555;font-size:0.85rem;letter-spacing:2px;text-transform:uppercase;margin-top:0;'>Buy · Sell · Swap Streetwear</p>", unsafe_allow_html=True)
+    # Vending machine hero
+    if _vend_b64:
+        st.markdown(f'''
+        <div class="hero-graphic">
+            <img src="data:image/png;base64,{_vend_b64}" alt="Thrift Star">
+        </div>
+        ''', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
         with st.container(border=True):
@@ -661,15 +757,24 @@ if choice == "Home Feed":
         cols = st.columns(3)
         for index, item in enumerate(feed):
             with cols[index % 3]:
-                with st.container(border=True):
-                    image_url = item['photos'][0] if item.get('photos') and len(item['photos']) > 0 else "https://placehold.co/400x400/333/FFF?text=No+Image"
-                    st.image(image_url, use_container_width=True)
-                    st.markdown(f"### {item['brand']}")
-                    st.markdown(f"**{item['listing_title']}**")
-                    st.markdown(f"**${item['price']}**")
-                    if st.button("🔍 View Details", key=f"view_{item['id']}"):
-                        st.session_state.view_item = item
-                        st.rerun()
+                image_url = item['photos'][0] if item.get('photos') and len(item['photos']) > 0 else "https://placehold.co/400x400/1A1A1C/888?text=No+Image"
+                size_tag = f"<span style='font-size:0.7rem;color:#666;'>{item.get('size','')}</span>" if item.get('size') else ""
+                st.markdown(f"""
+                <div class="grailed-card">
+                    <img src="{image_url}" alt="{item['brand']}">
+                    <div class="card-info">
+                        <div class="card-brand">{item['brand']}</div>
+                        <div class="card-title">{item['listing_title']}</div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span class="card-price">${item['price']}</span>
+                            {size_tag}
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("View", key=f"view_{item['id']}"):
+                    st.session_state.view_item = item
+                    st.rerun()
 
 elif choice == "Shopping Cart":
     st.subheader("Your Shopping Cart")
