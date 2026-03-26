@@ -387,10 +387,21 @@ def create_shipping_label(sender_id, receiver_id):
 # ==========================================
 # 🛑 LOGIN / SIGN UP WALL
 # ==========================================
+import base64
+def get_img_b64(path):
+    try:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except:
+        return ""
+
 if st.session_state.user is None:
-    st.markdown("<h1 style='text-align: center;'>⭐ Thrift Star</h1>", unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align: center; color: gray;'>Sign in to start swapping.</h4>", unsafe_allow_html=True)
-    st.divider()
+    banner_b64 = get_img_b64("banner.png")
+    if banner_b64:
+        st.markdown(f'<img src="data:image/png;base64,{banner_b64}" style="width:100%;border-radius:16px;margin-bottom:1rem;"/>', unsafe_allow_html=True)
+    else:
+        st.markdown("<h1 style='text-align:center;font-family:Bebas Neue,sans-serif;letter-spacing:4px;color:#F5A623;'>⭐ THRIFT STAR</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;color:#888;margin-bottom:1.5rem;'>The premier marketplace to buy, sell & swap streetwear.</p>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
         with st.container(border=True):
@@ -445,9 +456,18 @@ if st.session_state.user is None:
                     st.error("Please fill out all fields.")
     st.stop()
 
+import base64 as _b64
+def _img64(p):
+    try:
+        with open(p, "rb") as f: return _b64.b64encode(f.read()).decode()
+    except: return ""
+
 # ==========================================
 # ✅ MAIN THRIFT STAR APP (LOGGED IN)
 # ==========================================
+_banner = _img64("banner.png")
+if _banner:
+    st.markdown(f'<img src="data:image/png;base64,{_banner}" style="width:100%;border-radius:16px;margin-bottom:0.5rem;"/>', unsafe_allow_html=True)
 ME_ID = st.session_state.user.id
 me_data = get_user_by_id(ME_ID)
 ME_NAME = me_data["username"] if me_data else "User"
