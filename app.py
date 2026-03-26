@@ -575,11 +575,55 @@ elif choice == "Negotiations & Offers":
                                 st.error("Please add a Shipping Address in Profile & Settings before accepting!")
                             else:
                                 update_payload = {"status": "Accepted", "action_with_id": None}
-                                if p['cash_added'] > 0 and (am_i_proposer if is_cash_offer else am_i_proposer):
-                                    success, message_or_id = process_sandbox_payment(p['cash_added'])
-                                    if success: update_payload["braintree_txn_id"] = message_or_id
-                                supabase.table("swap_proposals").update(update_payload).eq("id", p["id"]).execute()
-                                st.rerun()
+                                payment_successful = True
+
+                                # Step 1: Process cash boot payment if applicable
+                                if p['cash_added'] > 0:
+                                    pay_success, pay_result = process_sandbox_payment(float(p['cash_added']))
+                                    if pay_success:
+                                        update_payload["braintree_txn_id"] = pay_result
+                                    else:
+                                        st.error(f"Payment Failed: {pay_result}. Please try again.")
+                                        payment_successful = False
+
+                                # Step 2: Only finalize if payment passed
+                                if payment_successful:
+                                    supabase.table("swap_proposals").update(update_payload).eq("id", p["id"]).execute()
+
+                                    if is_cash_offer:
+                                        # CASH OFFER: 1 order, mark 1 item sold
+                                        supabase.table("orders").insert({
+                                            "buyer_id": p["original_proposer_id"],
+                                            "seller_id": p["original_receiver_id"],
+                                            "item_id": p["item_wanted_id"],
+                                            "amount": p["cash_added"],
+                                            "braintree_txn_id": update_payload.get("braintree_txn_id", "Cash-Offer")
+                                        }).execute()
+                                        supabase.table("items").update({"status": "Sold"}).eq("id", p["item_wanted_id"]).execute()
+                                    else:
+                                        # ITEM SWAP: 2 orders, mark BOTH items as Swapped
+                                        # Leg A: Proposer receives Receiver's item
+                                        supabase.table("orders").insert({
+                                            "buyer_id": p["original_proposer_id"],
+                                            "seller_id": p["original_receiver_id"],
+                                            "item_id": p["item_wanted_id"],
+                                            "amount": p["cash_added"],
+                                            "braintree_txn_id": update_payload.get("braintree_txn_id", "Swap-Leg-A")
+                                        }).execute()
+                                        # Leg B: Receiver gets Proposer's item
+                                        supabase.table("orders").insert({
+                                            "buyer_id": p["original_receiver_id"],
+                                            "seller_id": p["original_proposer_id"],
+                                            "item_id": p["item_offered_id"],
+                                            "amount": 0,
+                                            "braintree_txn_id": "Swap-Leg-B"
+                                        }).execute()
+                                        # Remove BOTH items from the active marketplace
+                                        supabase.table("items").update({"status": "Swapped"}).eq("id", p["item_wanted_id"]).execute()
+                                        supabase.table("items").update({"status": "Swapped"}).eq("id", p["item_offered_id"]).execute()
+
+                                    st.success("Deal finalized! Both parties can now generate shipping labels.")
+                                    st.rerun()
 
 elif choice == "Profile & Settings":
     st.subheader("User Profile & Location Configuration")
