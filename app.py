@@ -488,6 +488,17 @@ def get_cart_items():
 
 st.title("⭐ Thrift Star")
 st.markdown("*The premier marketplace for thrifters to buy, sell, and **SWAP**.*")
+
+# Sidebar sketch art
+with st.sidebar:
+    st.divider()
+    _sk_bad = _img64("sketch_bad_actor_2.png")
+    _sk_dome = _img64("sketch_no_dome_2.png")
+    _sk_vm = _img64("sketch_blunt_vending_machine_2.png")
+    for sk in [_sk_bad, _sk_dome, _sk_vm]:
+        if sk:
+            st.markdown(f'<img src="data:image/png;base64,{sk}" style="width:100%;opacity:0.55;filter:invert(1);margin-bottom:0.5rem;"/>', unsafe_allow_html=True)
+
 st.divider()
 
 menu = ["Home Feed", "Shopping Cart", "Negotiations & Offers", "My Closet", "Purchases & Sales", "Profile & Settings"]
@@ -630,10 +641,22 @@ if st.session_state.checkout_item is not None:
 
 
 if choice == "Home Feed":
-    st.subheader("Discover Items")
+    # Home Feed header with lighter sketch accent
+    _fire = _img64("sketch_fire_2.png")
+    _shoe = _img64("sketch_shoe_2.png")
+    hcol1, hcol2 = st.columns([5,1])
+    with hcol1:
+        st.subheader("Discover Items")
+    with hcol2:
+        if _fire:
+            st.markdown(f'<img src="data:image/png;base64,{_fire}" style="height:80px;opacity:0.85;filter:invert(1) sepia(1) saturate(5) hue-rotate(5deg);"/>', unsafe_allow_html=True)
     feed = get_feed_items()
     if not feed:
-        st.info("No available items in the feed right now.")
+        if _shoe:
+            c1,c2,c3 = st.columns([1,2,1])
+            with c2:
+                st.markdown(f'<img src="data:image/png;base64,{_shoe}" style="width:100%;opacity:0.6;filter:invert(1);"/>', unsafe_allow_html=True)
+        st.markdown("<p style='text-align:center;color:#555;'>No items in the feed yet — be the first to list something! 👟</p>", unsafe_allow_html=True)
     else:
         cols = st.columns(3)
         for index, item in enumerate(feed):
@@ -652,7 +675,12 @@ elif choice == "Shopping Cart":
     st.subheader("Your Shopping Cart")
     cart_items = get_cart_items()
     if not cart_items:
-        st.info("Your cart is empty.")
+        _woof = _img64("sketch_woof_2.png")
+        if _woof:
+            c1,c2,c3 = st.columns([1,1,1])
+            with c2:
+                st.markdown(f'<img src="data:image/png;base64,{_woof}" style="width:100%;opacity:0.7;filter:invert(1);"/>', unsafe_allow_html=True)
+        st.markdown("<p style='text-align:center;color:#555;font-size:1.2rem;'>Woof! Your cart is empty.</p>", unsafe_allow_html=True)
     else:
         subtotal_price = 0
         for c in cart_items:
