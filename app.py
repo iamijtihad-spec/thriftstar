@@ -285,6 +285,11 @@ def logout():
     st.session_state.refresh_token = None
     st.session_state.checkout_item = None
     st.session_state.view_item = None
+    st.session_state.editing_item = None
+    st.session_state.new_photos = []
+    st.session_state.edit_photos = []
+    st.session_state.processed_files = []
+    st.session_state.edit_processed = []
     import time
     time.sleep(0.5)
     st.rerun()
