@@ -707,14 +707,14 @@ def render_isolated_item_page(item):
         if item['owner_id'] != ME_ID and item['status'] == 'Available':
             act_cols = st.columns(2)
             with act_cols[0]:
-                if st.button("🛒 Add to Cart", key=f"isocart_{item['id']}"):
+                if st.button("Add to Cart", key=f"isocart_{item['id']}"):
                     try:
                         supabase.table("cart_items").insert({"user_id": ME_ID, "item_id": item['id']}).execute()
                         st.toast("Added to cart!")
                     except:
                         st.toast("Already in cart.")
             with act_cols[1]:
-                if st.button("⚡ Buy Now", key=f"isobuy_{item['id']}", type="primary"):
+                if st.button("Buy Now", key=f"isobuy_{item['id']}", type="primary"):
                     st.session_state.checkout_item = item
                     st.session_state.view_item     = None
                     st.rerun()
@@ -726,7 +726,7 @@ def render_isolated_item_page(item):
                     item_options   = {i["listing_title"]: i for i in my_items}
                     offer_item_name = st.selectbox("Select from your closet:", list(item_options.keys()), key=f"isoselect_{item['id']}")
                     cash_boot       = st.number_input("Cash boot ($)?", min_value=0, value=0, step=10, key=f"isocash_{item['id']}")
-                    if st.button("Send Swap Offer", key=f"isobtn_{item['id']}"):
+                    if st.button("Send Offer", key=f"isobtn_{item['id']}"):
                         offered_item = item_options[offer_item_name]
                         supabase.table("swap_proposals").insert({
                             "original_proposer_id": ME_ID,
@@ -838,14 +838,14 @@ if choice == "Home Feed":
                 """, unsafe_allow_html=True)
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.button("🛒", key=f"cart_{item['id']}", help="Add to cart"):
+                    if st.button("Cart", key=f"cart_{item['id']}", help="Add to cart"):
                         try:
                             supabase.table("cart_items").insert({"user_id": ME_ID, "item_id": item['id']}).execute()
                             st.toast(f"Added {brand} to cart!")
                         except:
                             st.toast("Already in cart.")
                 with c2:
-                    if st.button("🔍", key=f"view_{item['id']}", help="View details"):
+                    if st.button("View", key=f"view_{item['id']}", help="View details"):
                         st.session_state.view_item = item
                         st.rerun()
                 with st.expander("🤝 Swap"):
@@ -889,7 +889,7 @@ elif choice == "Shopping Cart":
                     st.markdown(f"**{item['brand']} {item['listing_title']}**")
                     st.markdown(f"### ${item['price']}")
                 with colC:
-                    if st.button("❌ Remove", key=f"rm_cart_{c['id']}"):
+                    if st.button("Remove", key=f"rm_cart_{c['id']}"):
                         supabase.table("cart_items").delete().eq("id", c['id']).execute()
                         st.rerun()
         burger_divider()
@@ -898,7 +898,7 @@ elif choice == "Shopping Cart":
         st.markdown(f"**Subtotal:** ${subtotal_price:.2f} | **ThriftStar Fee (10%):** ${app_fee:.2f}")
         st.markdown(f"## Total: ${total_price:.2f}")
         st.radio("Payment Method", ["PayPal Dashboard", "Credit Card"])
-        if st.button("💳 Confirm Checkout & Pay", type="primary"):
+        if st.button("Confirm Checkout", type="primary"):
             addr = me_data.get('address')
             if not addr or not addr.get("street1"):
                 st.error("Please add a Shipping Address in Profile & Settings before checking out.")
@@ -991,7 +991,7 @@ elif choice == "Negotiations & Offers":
             # Action area
             if status == "Accepted":
                 st.success("✅ Deal closed! Generate your shipping labels below.")
-                if st.button("📦 Generate Shipping Label", key=f"sship_{p['id']}"):
+                if st.button("Generate Shipping Label", key=f"sship_{p['id']}"):
                     s1, err = create_shipping_label(ME_ID, other_user_id)
                     if s1: st.markdown(f"📥 **[Download Label → {other_username}]({err})**")
                     else:  st.error(err)
@@ -999,7 +999,7 @@ elif choice == "Negotiations & Offers":
                 st.error("❌ This offer was declined.")
             else:
                 if p["action_with_id"] != ME_ID:
-                    st.caption("⏳ Waiting for their response...")
+                    st.caption("Waiting for their response...")
                 else:
                     col_a, col_b, col_c = st.columns([2, 1, 1])
                     with col_a:
@@ -1007,7 +1007,7 @@ elif choice == "Negotiations & Offers":
                                         value=int(p.get('cash_added') or 0),
                                         step=5, key=f"counter_{p['id']}")
                     with col_b:
-                        if st.button("✅ Accept", key=f"acc_{p['id']}", type="primary"):
+                        if st.button("Accept", key=f"acc_{p['id']}", type="primary"):
                             addr = me_data.get('address')
                             if not addr or not addr.get('street1'):
                                 st.error("Add Shipping Address in Settings first!")
@@ -1054,7 +1054,7 @@ elif choice == "Negotiations & Offers":
                                     st.toast("Deal done! 🤝 Generate your shipping labels.")
                                     st.rerun()
                     with col_c:
-                        if st.button("❌ Decline", key=f"dec_{p['id']}"):
+                        if st.button("Decline", key=f"dec_{p['id']}"):
                             supabase.table("swap_proposals").update({"status": "Declined"}).eq("id", p["id"]).execute()
                             st.toast("Offer declined.")
                             st.rerun()
@@ -1152,7 +1152,7 @@ elif choice == "Purchases & Sales":
             with st.container(border=True):
                 st.markdown(f"**[{role}]** {item['brand']} {item['listing_title']} — **${o['amount']}**")
                 st.caption(f"Order ID: {o['id']} | Txn: {o.get('braintree_txn_id','')}")
-                if st.button("📦 Generate Auto-Routing Label", key=f"label_{o['id']}"):
+                if st.button("Generate Shipping Label", key=f"label_{o['id']}"):
                     with st.spinner("Generating USPS Label..."):
                         success, label_or_err = create_shipping_label(o['seller']['id'], o['buyer']['id'])
                         if success:
