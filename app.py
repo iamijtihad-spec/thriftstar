@@ -108,7 +108,7 @@ def empty_state(img_uri, title, subtitle):
 
 
 # --- PREMIUM UI DESIGN SYSTEM ---
-st.markdown("""
+st.html("""
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* Base */
@@ -693,8 +693,11 @@ def render_isolated_item_page(item):
     burger_divider()
     colA, colB = st.columns([1, 1])
     with colA:
-        img = item['photos'][0] if item.get('photos') else "https://placehold.co/600x600/1A1A1C/333?text=No+Image"
-        st.image(img, use_container_width=True)
+        if item.get('photos') and len(item['photos']) > 0:
+            for i, p_url in enumerate(item['photos']):
+                st.image(p_url, use_container_width=True, caption=f"Photo {i+1}")
+        else:
+            st.image("https://placehold.co/600x600/1A1A1C/333?text=No+Image", use_container_width=True)
     with colB:
         st.subheader(f"{item['brand']} {item['listing_title']}")
         seller = get_user_by_id(item['owner_id'])
@@ -1102,24 +1105,25 @@ elif choice == "My Closet":
             price     = st.number_input("Estimated Value ($)", min_value=1.0)
             condition = st.selectbox("Condition", ['New', 'Gently Used', 'Used', 'Very Worn'])
         with col2:
-            uploaded_file = st.file_uploader("Upload Photo", type=["jpg", "jpeg", "png"])
+            uploaded_files = st.file_uploader("Upload Photos (Max 5)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
             desc = st.text_area("Description")
         if st.form_submit_button("List Item"):
             if brand and name:
                 image_urls = []
-                if uploaded_file is not None:
-                    ext   = uploaded_file.name.split(".")[-1]
-                    fname = f"{uuid.uuid4()}.{ext}"
-                    try:
-                        s3_client.put_object(
-                            Bucket=S3_BUCKET, Key=fname,
-                            Body=uploaded_file.getvalue(),
-                            ContentType=uploaded_file.type
-                        )
-                        image_urls.append(f"{url}/storage/v1/object/public/{S3_BUCKET}/{fname}")
-                    except Exception as e:
-                        st.error(f"S3 Error: {e}")
-                        st.stop()
+                if uploaded_files:
+                    for f in uploaded_files:
+                        ext   = f.name.split(".")[-1]
+                        fname = f"{uuid.uuid4()}.{ext}"
+                        try:
+                            s3_client.put_object(
+                                Bucket=S3_BUCKET, Key=fname,
+                                Body=f.getvalue(),
+                                ContentType=f.type
+                            )
+                            image_urls.append(f"{url}/storage/v1/object/public/{S3_BUCKET}/{fname}")
+                        except Exception as e:
+                            st.error(f"S3 Error: {e}")
+                            st.stop()
                 try:
                     res = supabase.table("items").insert({
                         "owner_id": ME_ID, "brand": brand, "listing_title": name,
