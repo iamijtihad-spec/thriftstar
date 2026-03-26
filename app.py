@@ -20,6 +20,9 @@ def get_secret(key):
     except Exception:
         return os.getenv(key)
 
+# Set page config FIRST — Streamlit Cloud requires this before any other st.* calls
+st.set_page_config(page_title="Thrift Star", layout="wide", page_icon="⭐")
+
 # Initialize Supabase
 url = get_secret("SUPABASE_URL")
 key = get_secret("SUPABASE_KEY")
@@ -56,9 +59,6 @@ except Exception as e:
 # Initialize Shippo
 SHIPPO_API_KEY = get_secret("SHIPPO_API_KEY")
 shippo_configured = bool(SHIPPO_API_KEY)
-
-# Set page config
-st.set_page_config(page_title="Thrift Star", layout="wide", page_icon="⭐")
 
 # --- PERSISTENT AUTHENTICATION ENGINE ---
 if 'user' not in st.session_state:
