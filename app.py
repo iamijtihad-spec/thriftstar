@@ -354,11 +354,11 @@ details summary {
 }
 .hero-graphic img {
     max-width: 320px;
-    filter: drop-shadow(0 0 20px rgba(245,166,35,0.15));
+    filter: drop-shadow(0 0 12px rgba(0,0,0,0.05));
     transition: filter 0.3s ease, transform 0.3s ease;
 }
 .hero-graphic:hover img {
-    filter: drop-shadow(0 0 35px rgba(245,166,35,0.4));
+    filter: drop-shadow(0 0 24px rgba(245,166,35,0.25));
     transform: scale(1.03);
 }
 
@@ -375,10 +375,9 @@ details summary {
     max-width: 140px;
     margin-bottom: 1rem;
     opacity: 0.6;
-    filter: invert(1);
 }
-.empty-state h3 { color: #666 !important; font-size: 1rem !important; }
-.empty-state p  { color: #444 !important; font-size: 0.85rem !important; }
+.empty-state h3 { color: #888 !important; font-size: 1rem !important; }
+.empty-state p  { color: #AAA !important; font-size: 0.85rem !important; }
 
 /* Burger / lighter divider */
 .burger-divider {
@@ -387,7 +386,7 @@ details summary {
     gap: 1rem;
     margin: 0.5rem 0;
 }
-.burger-divider img { height: 28px; opacity: 0.35; filter: invert(1); }
+.burger-divider img { height: 28px; opacity: 0.35; }
 .burger-divider hr  { flex: 1; border-color: #2A2A30; margin: 0; }
 
 /* Kill column padding for dense grid */
@@ -674,7 +673,7 @@ with st.sidebar:
     for uri in [URI_BAD, URI_DOME]:
         if uri:
             st.markdown(
-                f'<img src="{uri}" style="width:100%;opacity:0.45;filter:invert(1);margin-bottom:0.4rem;"/>',
+                f'<img src="{uri}" style="width:100%;opacity:0.45;margin-bottom:0.4rem;"/>',
                 unsafe_allow_html=True
             )
 
@@ -810,7 +809,7 @@ if choice == "Home Feed":
     with hcol2:
         if URI_BURGER:
             st.markdown(
-                f'<img src="{URI_BURGER}" style="height:72px;opacity:0.9;filter:invert(1) sepia(1) saturate(8) hue-rotate(5deg);"/>',
+                f'<img src="{URI_BURGER}" style="height:72px;opacity:0.9;filter:sepia(1) saturate(8) hue-rotate(5deg);"/>',
                 unsafe_allow_html=True
             )
     feed = get_feed_items()
@@ -934,7 +933,7 @@ elif choice == "Negotiations & Offers":
     with hc2:
         if URI_BAD:
             st.markdown(
-                f'<img src="{URI_BAD}" style="height:64px;opacity:0.5;filter:invert(1);"/>',
+                f'<img src="{URI_BAD}" style="height:64px;opacity:0.5;"/>',
                 unsafe_allow_html=True
             )
     prop_res = supabase.table("swap_proposals") \
