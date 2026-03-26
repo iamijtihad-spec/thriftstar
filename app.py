@@ -113,11 +113,11 @@ st.html("""
 <style>
 /* Base */
 html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-    background-color: #0D0D0F !important;
-    color: #F0F0F0 !important;
+    background-color: #FFFFFF !important;
+    color: #1A1A1C !important;
     font-family: 'Inter', sans-serif !important;
 }
-[data-testid="stMain"] { background-color: #0D0D0F !important; }
+[data-testid="stMain"] { background-color: #FFFFFF !important; }
 [data-testid="block-container"] { padding-top: 1.5rem !important; }
 
 /* Hide Streamlit chrome */
@@ -151,22 +151,22 @@ h1 {
 h2 {
     font-family: 'Bebas Neue', sans-serif !important;
     letter-spacing: 2px !important;
-    color: #F0F0F0 !important;
+    color: #1A1A1C !important;
 }
 h3 {
     font-family: 'Inter', sans-serif !important;
     font-weight: 700 !important;
-    color: #F0F0F0 !important;
+    color: #1A1A1C !important;
 }
-p, li, label, span { color: #C8C8C8 !important; }
+p, li, label, span { color: #666 !important; }
 
 /* Cards (st.container with border) */
 [data-testid="stVerticalBlockBorderWrapper"] > div {
-    background: rgba(26, 26, 28, 0.85) !important;
-    border: 1px solid #2A2A30 !important;
+    background: #FFFFFF !important;
+    border: 1px solid #EAEAEA !important;
     border-radius: 14px !important;
     padding: 1rem !important;
-    backdrop-filter: blur(12px) !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.03) !important;
     transition: border-color 0.25s, box-shadow 0.25s !important;
 }
 [data-testid="stVerticalBlockBorderWrapper"] > div:hover {
@@ -176,9 +176,9 @@ p, li, label, span { color: #C8C8C8 !important; }
 
 /* Buttons */
 .stButton > button {
-    background: #1A1A1C !important;
-    color: #F0F0F0 !important;
-    border: 1px solid #3A3A40 !important;
+    background: #FFFFFF !important;
+    color: #1A1A1C !important;
+    border: 1px solid #EAEAEA !important;
     border-radius: 999px !important;
     font-family: 'Inter', sans-serif !important;
     font-weight: 600 !important;
@@ -302,10 +302,10 @@ details summary {
 /* Grailed-style item cards */
 .grailed-card {
     position: relative;
-    background: #111114;
+    background: #FFFFFF;
     border-radius: 12px;
     overflow: hidden;
-    border: 1px solid #222;
+    border: 1px solid #EAEAEA;
     transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     cursor: pointer;
     margin-bottom: 1rem;
@@ -327,7 +327,7 @@ details summary {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1rem;
     letter-spacing: 1.5px;
-    color: #F0F0F0;
+    color: #1A1A1C;
     line-height: 1.1;
 }
 .grailed-card .card-title {
@@ -457,7 +457,7 @@ details summary {
 .dm-status-pill.accepted { background: rgba(0,200,100,0.15);  color: #00C864 !important;  border: 1px solid #00C864; }
 .dm-status-pill.declined { background: rgba(255,60,60,0.15);  color: #FF3C3C !important;  border: 1px solid #FF3C3C; }
 </style>
-""", unsafe_allow_html=True)
+""")
 
 
 # ==========================================
