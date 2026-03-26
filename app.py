@@ -120,11 +120,6 @@ def empty_state(img_uri, title, subtitle):
 
 
 # --- PREMIUM UI DESIGN SYSTEM ---
-</style>
-""", unsafe_allow_html=True)
-# Correction: st.html() in modern Streamlit does not use unsafe_allow_html.
-# Using st.markdown for maximum compatibility with current user's environment if needed,
-# but since the error explicitly mentioned st.html, we just fix the signature.
 st.html("""
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
