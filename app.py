@@ -8,7 +8,7 @@ import requests
 import json
 import base64
 from streamlit_cookies_controller import CookieController
-from PIL import Image
+from PIL import Image, ImageOps
 import io
 from dotenv import load_dotenv
 import streamlit.components.v1 as components
@@ -34,9 +34,10 @@ st.set_page_config(
 # --- SESSION STATE INITIALIZATION ---
 for key, val in {
     "user": None, "access_token": None, "refresh_token": None,
-    "view_item": None, "checkout_item": None,
+    "view_item": None, "checkout_item": None, "editing_item": None,
     "active_checkout_type": None, "active_checkout_id": None, "active_checkout_amount": 0,
-    "pending_accept_id": None
+    "pending_accept_id": None,
+    "new_photos": [], "edit_photos": [], "processed_files": [], "edit_processed": []
 }.items():
     if key not in st.session_state:
         st.session_state[key] = val
@@ -107,6 +108,41 @@ def burger_divider():
         )
     else:
         st.divider()
+
+def process_image(file):
+    """Processes an uploaded file into a standardized, oriented PIL Image."""
+    try:
+        img = Image.open(file)
+        img = ImageOps.exif_transpose(img) # Correct orientation
+        if img.mode != 'RGB': img = img.convert('RGB')
+        img.thumbnail((800, 800), Image.Resampling.LANCZOS)
+        return img
+    except Exception: return None
+
+def render_image_editor(key_prefix="new"):
+    """Interactive UI to rotate/delete images in session state (handles URLs and PIL)."""
+    state_key = f"{key_prefix}_photos"
+    if state_key not in st.session_state: st.session_state[state_key] = []
+    
+    if st.session_state[state_key]:
+        cols = st.columns(4)
+        for idx, img in enumerate(st.session_state[state_key]):
+            with cols[idx % 4]:
+                st.image(img, use_container_width=True)
+                c1, c2 = st.columns(2)
+                if c1.button("↺", key=f"rot_{key_prefix}_{idx}"):
+                    # If it's a URL, we must download it to rotate it
+                    if isinstance(img, str):
+                        try:
+                            resp = requests.get(img)
+                            img = Image.open(io.BytesIO(resp.content))
+                        except Exception: st.error("Failed to rotate cloud image."); st.stop()
+                    
+                    st.session_state[state_key][idx] = img.rotate(90, expand=True)
+                    st.rerun()
+                if c2.button("🗑️", key=f"del_{key_prefix}_{idx}"):
+                    st.session_state[state_key].pop(idx)
+                    st.rerun()
 
 def empty_state(img_uri, title, subtitle):
     img_html = f'<img src="{img_uri}">' if img_uri else ''
@@ -453,6 +489,74 @@ def render_isolated_item_page(item):
                 st.session_state.checkout_item = item
                 st.session_state.view_item = None
                 st.rerun()
+        elif item['owner_id'] == ME_ID:
+            if st.button("Edit Listing", type="primary"):
+                st.session_state.editing_item = item
+                st.session_state.view_item = None
+                # Load existing photos into edit state
+                st.session_state.edit_photos = item.get('photos', []).copy()
+                st.rerun()
+
+# --- EDIT ITEM PAGE ---
+def render_edit_item_page(item):
+    st.button("← Cancel", on_click=lambda: st.session_state.update(editing_item=None))
+    burger_divider()
+    st.subheader(f"Edit {item['brand']} {item['listing_title']}")
+    
+    # Use the same image editor logic
+    files = st.file_uploader("Add more photos", accept_multiple_files=True)
+    if files:
+        if "edit_processed" not in st.session_state: st.session_state.edit_processed = []
+        for f in files:
+            if f.name not in st.session_state.edit_processed:
+                img = process_image(f)
+                if img:
+                    st.session_state.edit_photos.append(img)
+                    st.session_state.edit_processed.append(f.name)
+    
+    render_image_editor("edit")
+    
+    with st.form("edit_item_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            brand = st.text_input("Brand", value=item['brand'])
+            title = st.text_input("Title", value=item['listing_title'])
+            price = st.number_input("Price ($)", min_value=1, value=int(item['price']))
+        with col2:
+            size = st.text_input("Size", value=item.get('size',''))
+            cat = st.selectbox("Category", ["Tops", "Bottoms", "Outerwear", "Sneakers", "Accessories", "Other"], 
+                               index=["Tops", "Bottoms", "Outerwear", "Sneakers", "Accessories", "Other"].index(item.get('category','Other')))
+            cond = st.selectbox("Condition", ['New', 'Gently Used', 'Used', 'Very Worn'], 
+                                index=['New', 'Gently Used', 'Used', 'Very Worn'].index(item.get('condition','Used')))
+        
+        desc = st.text_area("Description", value=item.get('description',''))
+        
+        if st.form_submit_button("Save Changes"):
+            if brand and title and st.session_state.edit_photos:
+                final_urls = []
+                for img in st.session_state.edit_photos:
+                    if isinstance(img, str): # Existing URL
+                        final_urls.append(img)
+                    else: # New PIL Image
+                        try:
+                            buf = io.BytesIO()
+                            img.save(buf, format='JPEG', quality=82)
+                            fname = f"{uuid.uuid4()}.jpg"
+                            s3_client.put_object(Bucket=S3_BUCKET, Key=fname, Body=buf.getvalue(), ContentType='image/jpeg')
+                            final_urls.append(f"{url}/storage/v1/object/public/{S3_BUCKET}/{fname}")
+                        except Exception as e: st.error(f"Upload Error: {e}")
+                
+                supabase.table("items").update({
+                    "brand": brand, "listing_title": title, "price": price,
+                    "photos": final_urls, "category": cat, "size": size,
+                    "condition": cond, "description": desc
+                }).eq("id", item['id']).execute()
+                
+                st.session_state.editing_item = None
+                st.toast("Listing Updated! ✨")
+                st.rerun()
+            else:
+                st.error("Brand, Title, and at least one photo are required.")
 
 # --- CHECKOUT PAGE (BUY NOW) ---
 def render_checkout_page(item):
@@ -510,6 +614,7 @@ def render_checkout_page(item):
 # Global Redirects
 if st.session_state.view_item: render_isolated_item_page(st.session_state.view_item); st.stop()
 if st.session_state.checkout_item: render_checkout_page(st.session_state.checkout_item); st.stop()
+if st.session_state.editing_item: render_edit_item_page(st.session_state.editing_item); st.stop()
 
 
 # ==========================================
@@ -695,41 +800,63 @@ elif choice == "My Closet":
 
     burger_divider()
     st.markdown("### Add New Item")
+    
+    # Image Upload & Interactive Editor (Outside Form for Reruns)
+    if "new_photos" not in st.session_state: st.session_state.new_photos = []
+    if "processed_files" not in st.session_state: st.session_state.processed_files = []
+    
+    files = st.file_uploader("Step 1: Upload Photos", accept_multiple_files=True)
+    if files:
+        for f in files:
+            if f.name not in st.session_state.processed_files:
+                img = process_image(f)
+                if img:
+                    st.session_state.new_photos.append(img)
+                    st.session_state.processed_files.append(f.name)
+    
+    if st.session_state.new_photos:
+        st.caption("Step 2: Adjust orientation/selection")
+        render_image_editor("new")
+    
     with st.form("add_item"):
+        st.markdown("#### Step 3: Item Details")
         col1, col2 = st.columns(2)
         with col1:
             brand     = st.text_input("Brand")
             title     = st.text_input("Listing Title")
             category  = st.selectbox("Category", ["Tops", "Bottoms", "Outerwear", "Sneakers", "Accessories", "Other"])
+        with col2:
             size      = st.text_input("Size")
             price     = st.number_input("Estimated Value ($)", min_value=1)
             condition = st.selectbox("Condition", ['New', 'Gently Used', 'Used', 'Very Worn'])
-        with col2:
-            files = st.file_uploader("Upload Photos", accept_multiple_files=True)
-            desc  = st.text_area("Description")
+        
+        desc = st.text_area("Description")
         
         if st.form_submit_button("List Item"):
-            if brand and title:
+            if brand and title and st.session_state.new_photos:
                 urls = []
-                if files:
-                    for f in files:
-                        try:
-                            img = Image.open(f)
-                            if img.mode != 'RGB': img = img.convert('RGB')
-                            img.thumbnail((800, 800), Image.Resampling.LANCZOS)
-                            buf = io.BytesIO()
-                            img.save(buf, format='JPEG', quality=82)
-                            fname = f"{uuid.uuid4()}.jpg"
-                            s3_client.put_object(Bucket=S3_BUCKET, Key=fname, Body=buf.getvalue(), ContentType='image/jpeg')
-                            urls.append(f"{url}/storage/v1/object/public/{S3_BUCKET}/{fname}")
-                        except Exception as e: st.error(f"Image Error: {e}")
+                for img in st.session_state.new_photos:
+                    try:
+                        buf = io.BytesIO()
+                        img.save(buf, format='JPEG', quality=82)
+                        fname = f"{uuid.uuid4()}.jpg"
+                        s3_client.put_object(Bucket=S3_BUCKET, Key=fname, Body=buf.getvalue(), ContentType='image/jpeg')
+                        urls.append(f"{url}/storage/v1/object/public/{S3_BUCKET}/{fname}")
+                    except Exception as e: st.error(f"Upload Error: {e}")
                 
                 supabase.table("items").insert({
                     "owner_id": ME_ID, "brand": brand, "listing_title": title, 
                     "price": price, "photos": urls, "category": category, 
                     "size": size, "condition": condition, "description": desc
                 }).execute()
+                # Clear state
+                st.session_state.new_photos = []
+                st.session_state.processed_files = []
                 st.toast("Item Listed! 🎉"); st.rerun()
+            elif not st.session_state.new_photos:
+                st.error("Please upload at least one photo.")
+            else:
+                st.error("Please fill in Brand and Title.")
 
 elif choice == "Purchases & Sales":
     st.markdown("<h2>HISTORY</h2>", unsafe_allow_html=True)
