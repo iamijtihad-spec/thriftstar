@@ -7,7 +7,11 @@ import uuid
 import requests
 import json
 import base64
+from streamlit_cookies_controller import CookieController
+from PIL import Image
+import io
 from dotenv import load_dotenv
+import streamlit.components.v1 as components
 from supabase import create_client, Client
 
 # --- DUAL-MODE SECRET LOADER ---
@@ -27,6 +31,16 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- SESSION STATE INITIALIZATION ---
+for key, val in {
+    "user": None, "access_token": None, "refresh_token": None,
+    "view_item": None, "checkout_item": None,
+    "active_checkout_type": None, "active_checkout_id": None, "active_checkout_amount": 0,
+    "pending_accept_id": None
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
+
 # Initialize Supabase
 url = get_secret("SUPABASE_URL")
 key = get_secret("SUPABASE_KEY")
@@ -41,7 +55,7 @@ s3_client = boto3.client(
     's3',
     aws_access_key_id=get_secret("AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=get_secret("AWS_SECRET_ACCESS_KEY"),
-    endpoint_url=f"{get_secret('SUPABASE_URL')}/storage/v1/s3",
+    endpoint_url=f"{url}/storage/v1/s3",
     region_name="us-east-1"
 )
 S3_BUCKET = "thriftstar"
@@ -81,8 +95,6 @@ URI_VEND   = get_data_uri("sketch_blunt_vending_machine_2.png")
 URI_BURGER = get_data_uri("sketch_fire_2.png")   # lighter/fire used as burger-divider art
 URI_WOOF   = get_data_uri("sketch_woof_2.png")
 URI_SHOE   = get_data_uri("sketch_shoe_2.png")
-URI_BAD    = get_data_uri("sketch_bad_actor_2.png")
-URI_DOME   = get_data_uri("sketch_no_dome_2.png")
 URI_BG     = get_data_uri("icon.png")            # app icon for sidebar logo
 
 
@@ -107,11 +119,11 @@ def empty_state(img_uri, title, subtitle):
     """, unsafe_allow_html=True)
 
 
-# --- PREMIUM UI DESIGN SYSTEM --# --- PREMIUM UI DESIGN SYSTEM ---
+# --- PREMIUM UI DESIGN SYSTEM ---
 st.html("""
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* Base */
+/* Base White Theme */
 html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
     background-color: #FFFFFF !important;
     color: #1A1A1C !important;
@@ -126,443 +138,190 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
     height: 0 !important;
 }
 
-/* Sidebar (Clean Mini) */
+/* Sidebar (Clean White/Gray) */
 [data-testid="stSidebar"] {
     background: #F7F7F7 !important;
     border-right: 1px solid #EAEAEA !important;
 }
-[data-testid="stSidebar"] * { color: #1A1A1C !important; }
 [data-testid="stSidebarNav"] { padding-top: 1rem !important; }
-[data-testid="stSidebar"] hr { border-color: #EAEAEA !important; }
 
-/* Global Spinner Polish */
-[data-testid="stSpinner"] {
-    display: flex;
-    justify-content: center;
-    padding: 2rem;
-}
-[data-testid="stSpinner"] > div { border-top-color: #F5A623 !important; }
-}
+/* Metric & Headings */
+h1 { font-family: 'Bebas Neue', sans-serif !important; color: #F5A623 !important; letter-spacing: 2px !important; }
+h2 { font-family: 'Bebas Neue', sans-serif !important; color: #1A1A1C !important; letter-spacing: 1px !important; }
+p, li, label, span { color: #555 !important; }
 
-/* Headings */
-h1 {
-    font-family: 'Bebas Neue', sans-serif !important;
-    font-size: 2.8rem !important;
-    letter-spacing: 3px !important;
-    color: #F5A623 !important;
-}
-h2 {
-    font-family: 'Bebas Neue', sans-serif !important;
-    letter-spacing: 2px !important;
-    color: #1A1A1C !important;
-}
-h3 {
-    font-family: 'Inter', sans-serif !important;
-    font-weight: 700 !important;
-    color: #1A1A1C !important;
-}
-p, li, label, span { color: #666 !important; }
-
-/* Cards (st.container with border) */
-[data-testid="stVerticalBlockBorderWrapper"] > div {
-    background: #FFFFFF !important;
-    border: 1px solid #EAEAEA !important;
-    border-radius: 14px !important;
-    padding: 1rem !important;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.03) !important;
-    transition: border-color 0.25s, box-shadow 0.25s !important;
-}
-[data-testid="stVerticalBlockBorderWrapper"] > div:hover {
-    border-color: #F5A623 !important;
-    box-shadow: 0 0 18px rgba(245, 166, 35, 0.18) !important;
-}
-
-/* Buttons */
+/* Buttons & Inputs */
 .stButton > button {
-    background: #FFFFFF !important;
-    color: #1A1A1C !important;
-    border: 1px solid #EAEAEA !important;
-    border-radius: 999px !important;
-    font-family: 'Inter', sans-serif !important;
+    border-radius: 20px !important;
     font-weight: 600 !important;
-    font-size: 0.83rem !important;
-    padding: 0.45rem 1.2rem !important;
-    transition: all 0.2s ease !important;
-    letter-spacing: 0.3px !important;
+    border: 1px solid #EAEAEA !important;
+    background: white !important;
+    color: #1A1A1C !important;
 }
 .stButton > button:hover {
     background: #F5A623 !important;
-    color: #0D0D0F !important;
     border-color: #F5A623 !important;
-    box-shadow: 0 4px 20px rgba(245,166,35,0.35) !important;
-    transform: translateY(-1px) !important;
 }
-/* Primary buttons */
-.stButton > button[kind="primary"] {
-    background: #F5A623 !important;
-    color: #0D0D0F !important;
-    border-color: #F5A623 !important;
-    font-weight: 700 !important;
-}
-.stButton > button[kind="primary"]:hover {
-    background: #FFB83E !important;
-    box-shadow: 0 6px 24px rgba(245,166,35,0.5) !important;
+.stTextInput input, .stTextArea textarea, .stNumberInput input {
+    background: #F9F9F9 !important;
+    border: 1px solid #EAEAEA !important;
+    color: #1A1A1C !important;
 }
 
-/* Inputs */
-.stTextInput > div > div > input,
-.stTextArea > div > div > textarea,
-.stNumberInput > div > div > input,
-.stSelectbox > div > div {
-    background: #1A1A1C !important;
-    color: #F0F0F0 !important;
-    border: 1px solid #2A2A30 !important;
-    border-radius: 10px !important;
-    font-family: 'Inter', sans-serif !important;
-}
-.stTextInput > div > div > input:focus,
-.stTextArea > div > div > textarea:focus {
-    border-color: #F5A623 !important;
-    box-shadow: 0 0 0 2px rgba(245,166,35,0.2) !important;
-}
-.stSelectbox > div > div { color: #F0F0F0 !important; }
-.stSelectbox svg { fill: #F5A623 !important; }
-[data-baseweb="popover"] { background: #1A1A1C !important; border: 1px solid #2A2A30 !important; }
-[role="option"] { color: #F0F0F0 !important; background: #1A1A1C !important; }
-[role="option"]:hover { background: #2A2A30 !important; }
-
-/* Labels */
-.stTextInput label,
-.stTextArea label,
-.stNumberInput label,
-.stSelectbox label,
-.stRadio label {
-    color: #888 !important;
-    font-size: 0.8rem !important;
-    font-weight: 500 !important;
-    letter-spacing: 0.5px !important;
-    text-transform: uppercase !important;
-}
-
-/* Radio buttons */
-.stRadio div[role="radiogroup"] { gap: 0.4rem !important; }
-
-/* Alerts */
-[data-testid="stAlert"] {
-    border-radius: 10px !important;
-    border-left-width: 3px !important;
-    background: rgba(26,26,28,0.9) !important;
-}
-
-/* Divider */
-hr { border-color: #2A2A30 !important; }
-
-/* Expander */
-details {
-    background: #111114 !important;
-    border: 1px solid #2A2A30 !important;
-    border-radius: 10px !important;
-    padding: 0.5rem 1rem !important;
-}
-details summary {
-    color: #F5A623 !important;
-    font-weight: 600 !important;
-}
-
-/* Spinner */
-[data-testid="stSpinner"] > div { border-top-color: #F5A623 !important; }
-
-/* Metric */
-[data-testid="stMetric"] label { color: #888 !important; }
-[data-testid="stMetric"] [data-testid="stMetricValue"] {
-    color: #F5A623 !important;
-    font-family: 'Bebas Neue' !important;
-    font-size: 2rem !important;
-}
-
-/* Images */
-[data-testid="stImage"] img { border-radius: 10px !important; }
-
-/* Form submit button */
-.stForm [data-testid="stFormSubmitButton"] > button {
-    background: #F5A623 !important;
-    color: #0D0D0F !important;
-    border-color: #F5A623 !important;
-    font-weight: 700 !important;
-    width: 100% !important;
-}
-
-/* Caption */
-.stCaption { color: #666 !important; font-size: 0.75rem !important; }
-
-/* File uploader */
-[data-testid="stFileUploaderDropzone"] {
-    background: #1A1A1C !important;
-    border: 1px dashed #2A2A30 !important;
-    border-radius: 10px !important;
-}
-
-/* Grailed-style item cards */
+/* Grailed Card Style */
 .grailed-card {
-    position: relative;
-    background: #FFFFFF;
-    border-radius: 12px;
-    overflow: hidden;
+    background: white;
     border: 1px solid #EAEAEA;
-    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-    cursor: pointer;
-    margin-bottom: 1rem;
-}
-.grailed-card:hover {
-    transform: translateY(-4px);
-    border-color: #F5A623;
-    box-shadow: 0 8px 30px rgba(245,166,35,0.2);
-}
-.grailed-card img {
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    object-fit: cover;
-    display: block;
-    border-radius: 0;
-}
-.grailed-card .card-info { padding: 0.6rem 0.75rem 0.75rem; }
-.grailed-card .card-brand {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1rem;
-    letter-spacing: 1.5px;
-    color: #1A1A1C;
-    line-height: 1.1;
-}
-.grailed-card .card-title {
-    font-size: 0.75rem;
-    color: #888;
-    margin: 0.15rem 0 0.4rem;
-    white-space: nowrap;
+    border-radius: 8px;
+    padding: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
+    margin-bottom: 1.5rem;
+    transition: all 0.2s ease;
 }
-.grailed-card .card-price {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.3rem;
-    color: #F5A623;
-    letter-spacing: 1px;
-}
+.grailed-card:hover { border-color: #F5A623; transform: translateY(-3px); }
+.grailed-card .card-info { padding: 8px 12px 12px; }
+.grailed-card .card-brand { font-family: 'Bebas Neue'; font-size: 1.1rem; color: #1A1A1C; }
+.grailed-card .card-title { font-size: 0.75rem; color: #888; margin-top: 2px; }
+.grailed-card .card-price { font-family: 'Bebas Neue'; color: #F5A623; font-size: 1.4rem; }
 
-/* Hero graphic (login wall) */
-.hero-graphic {
-    display: flex;
-    justify-content: center;
-    margin: 0.5rem 0 1.5rem;
-    transition: transform 0.3s ease;
-}
-.hero-graphic img {
-    max-width: 320px;
-    filter: drop-shadow(0 0 12px rgba(0,0,0,0.05));
-    transition: filter 0.3s ease, transform 0.3s ease;
-}
-.hero-graphic:hover img {
-    filter: drop-shadow(0 0 24px rgba(245,166,35,0.25));
-    transform: scale(1.03);
-}
+/* DM Bubbles */
+.dm-bubble { border-radius: 18px; padding: 10px 15px; font-size: 0.9rem; }
+.dm-bubble.sent { background: #F5A623; color: black !important; margin-left: auto; }
+.dm-bubble.received { background: #F0F0F0; color: black !important; margin-right: auto; }
 
-/* Empty state */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 2.5rem 1rem;
-    color: #555;
-}
-.empty-state img {
-    max-width: 140px;
-    margin-bottom: 1rem;
-    opacity: 0.6;
-}
-.empty-state h3 { color: #888 !important; font-size: 1rem !important; }
-.empty-state p  { color: #AAA !important; font-size: 0.85rem !important; }
-
-/* Burger / lighter divider */
-.burger-divider {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin: 0.5rem 0;
-}
-.burger-divider img { height: 28px; opacity: 0.35; }
-.burger-divider hr  { flex: 1; border-color: #2A2A30; margin: 0; }
-
-/* Kill column padding for dense grid */
-[data-testid="column"] { padding: 0 6px !important; }
-
-/* iMessage-style DM bubbles */
-.dm-thread {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    padding: 1rem 0;
-}
-.dm-bubble {
-    max-width: 75%;
-    padding: 0.6rem 0.9rem;
-    border-radius: 18px;
-    font-size: 0.88rem;
-    line-height: 1.4;
-    word-wrap: break-word;
-}
-.dm-bubble.sent {
-    background: #F5A623;
-    color: #0D0D0F !important;
-    align-self: flex-end;
-    border-bottom-right-radius: 4px;
-}
-.dm-bubble.received {
-    background: #1E1E22;
-    color: #F0F0F0 !important;
-    align-self: flex-start;
-    border-bottom-left-radius: 4px;
-    border: 1px solid #2A2A30;
-}
-.dm-bubble .dm-meta { font-size: 0.7rem; opacity: 0.6; margin-top: 0.25rem; }
-.dm-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    background: #111114;
-    border-radius: 12px;
-    border: 1px solid #2A2A30;
-    margin-bottom: 0.5rem;
-}
-.dm-avatar {
-    width: 40px; height: 40px;
-    border-radius: 50%;
-    background: #F5A623;
-    color: #0D0D0F !important;
-    font-weight: 700;
-    font-size: 1.1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-.dm-status-pill {
-    display: inline-block;
-    padding: 0.2rem 0.7rem;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
-.dm-status-pill.pending  { background: rgba(245,166,35,0.15); color: #F5A623 !important;  border: 1px solid #F5A623; }
-.dm-status-pill.accepted { background: rgba(0,200,100,0.15);  color: #00C864 !important;  border: 1px solid #00C864; }
-.dm-status-pill.declined { background: rgba(255,60,60,0.15);  color: #FF3C3C !important;  border: 1px solid #FF3C3C; }
+/* DM Header */
+.dm-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; padding: 10px; background: #fafafa; border-radius: 8px; border: 1px solid #eee; }
+.dm-avatar { width: 40px; height: 40px; border-radius: 50%; background: #F5A623; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.dm-status-pill { padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+.dm-status-pill.pending { background: #EAEAEA; color: #666; }
+.dm-status-pill.accepted { background: #00C864; color: white; }
+.dm-status-pill.declined { background: #FF3C3C; color: white; }
 </style>
-""")
+""", unsafe_allow_html=True)
 
 
 # ==========================================
-# SESSION MANAGEMENT
+# SESSION MANAGEMENT & PERSISTENCE
 # ==========================================
-if 'user'           not in st.session_state: st.session_state.user           = None
-if 'access_token'   not in st.session_state: st.session_state.access_token   = None
-if 'refresh_token'  not in st.session_state: st.session_state.refresh_token  = None
-if 'checkout_item'  not in st.session_state: st.session_state.checkout_item  = None
-if 'view_item'      not in st.session_state: st.session_state.view_item      = None
+cookie_manager = CookieController()
 
-SESSION_FILE = "auth_cookies.json"
+# Attempt to restore session from Browser Cookies on page load
+saved_access = cookie_manager.get("ts_access_token")
+saved_refresh = cookie_manager.get("ts_refresh_token")
 
-def get_persisted_sessions():
-    if os.path.exists(SESSION_FILE):
-        with open(SESSION_FILE, "r") as f:
-            return json.load(f)
-    return {}
+if saved_access and saved_refresh and st.session_state.user is None:
+    try:
+        res = supabase.auth.set_session(saved_access, saved_refresh)
+        if res.user:
+            st.session_state.user = res.user
+            st.session_state.access_token = saved_access
+            st.session_state.refresh_token = saved_refresh
+    except Exception:
+        cookie_manager.remove("ts_access_token")
+        cookie_manager.remove("ts_refresh_token")
 
-def save_session(device_id, access, refresh):
-    sessions = get_persisted_sessions()
-    sessions[device_id] = {"access_token": access, "refresh_token": refresh}
-    with open(SESSION_FILE, "w") as f:
-        json.dump(sessions, f)
-
-def remove_session(device_id):
-    sessions = get_persisted_sessions()
-    if device_id in sessions:
-        del sessions[device_id]
-        with open(SESSION_FILE, "w") as f:
-            json.dump(sessions, f)
-
-device_id = st.query_params.get("device")
-
-if device_id and st.session_state.user is None:
-    sessions = get_persisted_sessions()
-    if device_id in sessions:
-        tokens = sessions[device_id]
-        try:
-            res = supabase.auth.set_session(tokens["access_token"], tokens["refresh_token"])
-            if res.user:
-                st.session_state.user         = res.user
-                st.session_state.access_token = tokens["access_token"]
-                st.session_state.refresh_token = tokens["refresh_token"]
-        except Exception:
-            remove_session(device_id)
-
-if st.session_state.user is not None and st.session_state.access_token is not None:
+# Re-apply session state to the Supabase client to ensure thread safety
+if st.session_state.user and st.session_state.access_token:
     try:
         supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
     except Exception:
         pass
 
-def logout():
-    try: supabase.auth.sign_out()
-    except Exception: pass
-    did = st.query_params.get("device")
-    if did:
-        remove_session(did)
-        st.query_params.clear()
-    for k in ["user","access_token","refresh_token","checkout_item","view_item"]:
-        st.session_state[k] = None
+def login_user(access_token, refresh_token, user):
+    """Helper to set state and cookies upon successful login/signup"""
+    st.session_state.user = user
+    st.session_state.access_token = access_token
+    st.session_state.refresh_token = refresh_token
+    cookie_manager.set("ts_access_token", access_token, max_age=604800) # 7 days
+    cookie_manager.set("ts_refresh_token", refresh_token, max_age=604800)
 
+def logout():
+    try: 
+        supabase.auth.sign_out()
+    except Exception: 
+        pass
+    cookie_manager.remove("ts_access_token")
+    cookie_manager.remove("ts_refresh_token")
+    st.session_state.user = None
+    st.session_state.access_token = None
+    st.session_state.refresh_token = None
+    st.session_state.checkout_item = None
+    st.session_state.view_item = None
+    st.rerun()
 
 def get_user_by_id(user_id):
     res = supabase.table("users").select("*").eq("id", user_id).execute()
     return res.data[0] if res.data else None
 
 def get_braintree_client_token():
-    if not braintree_configured:
-        return None
-    try:
-        return gateway.client_token.generate()
-    except Exception:
-        return None
+    if not braintree_configured: return None
+    try: return gateway.client_token.generate()
+    except Exception: return None
 
 def process_braintree_transaction(amount, nonce):
-    if not braintree_configured:
-        return False, "Braintree gateway not configured."
+    if not braintree_configured: return False, "Braintree gateway not configured."
     result = gateway.transaction.sale({
         "amount": f"{amount:.2f}",
         "payment_method_nonce": nonce,
         "options": {"submit_for_settlement": True}
     })
-    if result.is_success:
-        return True, result.transaction.id
+    if result.is_success: return True, result.transaction.id
     return False, result.message
 
-def create_shipping_label(sender_id, receiver_id):
-    if not shippo_configured:
-        return False, "Shippo API key not configured."
-    sender   = get_user_by_id(sender_id)
+def render_braintree_dropin(amount, label="VERIFY PAYMENT", target_id="checkout"):
+    token = get_braintree_client_token()
+    if not token:
+        st.error("Payment Gateway unreachable.")
+        return
+    dropin_html = f"""
+    <script src="https://js.braintreegateway.com/web/dropin/1.42.0/js/dropin.min.js"></script>
+    <div id="dropin-container"></div>
+    <button id="submit-button" style="background:#000; color:white; border:none; padding:12px 24px; border-radius:4px; font-family:sans-serif; cursor:pointer; width:100%; font-weight:700; margin-top:10px;">{label}</button>
+    <script>
+        const button = document.querySelector('#submit-button');
+        braintree.dropin.create({{
+            authorization: '{token}',
+            container: '#dropin-container',
+            paypal: {{ flow: 'vault' }}
+        }}, (error, instance) => {{
+            if (error) console.error(error);
+            button.addEventListener('click', () => {{
+                instance.requestPaymentMethod((error, payload) => {{
+                    if (error) console.error(error);
+                    const url = new URL(window.top.location.href);
+                    url.searchParams.set('payment_nonce', payload.nonce);
+                    url.searchParams.set('payment_target', '{target_id}');
+                    window.top.location.href = url.href;
+                }});
+            }});
+        }});
+    </script>
+    """
+    components.html(dropin_html, height=550)
+    if st.button("Reset Payment State", key=f"reset_{target_id}"):
+        st.query_params.clear()
+        st.rerun()
+
+
+# ==========================================
+# 📦 LOGISTICS & SHIPPO FLOW
+# ==========================================
+def get_live_shipping_rate(sender_id, receiver_id):
+    """Fetches the lowest available shipping rate before checkout."""
+    if not shippo_configured: return False, 0.0, "Shippo not configured.", None
+    sender = get_user_by_id(sender_id)
     receiver = get_user_by_id(receiver_id)
-    addr_from = sender.get('address')
-    addr_to   = receiver.get('address')
-    if not addr_from or not addr_from.get('street1'):
-        return False, "Missing Sender Address."
-    if not addr_to or not addr_to.get('street1'):
-        return False, "Missing Receiver Address."
-    addr_from["email"] = sender.get("email", "support@thriftstar.app")
-    addr_from["phone"] = addr_from.get("phone", "5555555555")
-    addr_to["email"]   = receiver.get("email", "support@thriftstar.app")
-    addr_to["phone"]   = addr_to.get("phone", "5555555555")
+    if not sender or not receiver: return False, 0.0, "Users not found.", None
+    
+    addr_from = sender.get('address', {}).copy()
+    addr_to = receiver.get('address', {}).copy()
+    if not addr_from.get('street1') or not addr_to.get('street1'):
+        return False, 0.0, "Missing shipping addresses in Profile.", None
+
+    # Standardize for Shippo
+    addr_from.update({"country": "US", "name": sender.get("username", "Seller")})
+    addr_to.update({"country": "US", "name": receiver.get("username", "Buyer")})
+
     headers = {"Authorization": f"ShippoToken {SHIPPO_API_KEY}", "Content-Type": "application/json"}
     payload = {
         "address_from": addr_from, "address_to": addr_to,
@@ -572,537 +331,340 @@ def create_shipping_label(sender_id, receiver_id):
     try:
         response = requests.post("https://api.goshippo.com/shipments/", json=payload, headers=headers).json()
         if "rates" in response and len(response["rates"]) > 0:
-            rate_id = response["rates"][0]["object_id"]
-            txn = requests.post("https://api.goshippo.com/transactions/", json={"rate": rate_id, "async": False}, headers=headers).json()
-            if txn.get("status") == "SUCCESS":
-                return True, txn.get("label_url")
-            return False, "Shippo Transaction Error."
-        return False, "Shippo Rates Error."
+            rates = sorted(response["rates"], key=lambda x: float(x['amount']))
+            lowest_rate = rates[0]
+            return True, float(lowest_rate['amount']), "Success", lowest_rate['object_id']
+        return False, 0.0, "No rates found for this route.", None
     except Exception as e:
-        return False, f"Shippo Exception: {e}"
+        return False, 0.0, f"Shippo API Error: {e}", None
+
+def purchase_shipping_label(rate_id):
+    """Actually buys the label using the rate ID locked in at checkout."""
+    if not rate_id: return False, "No valid rate ID provided."
+    headers = {"Authorization": f"ShippoToken {SHIPPO_API_KEY}", "Content-Type": "application/json"}
+    try:
+        txn = requests.post("https://api.goshippo.com/transactions/", json={"rate": rate_id, "async": False}, headers=headers).json()
+        if txn.get("status") == "SUCCESS":
+            return True, txn.get("label_url")
+        return False, str(txn.get("messages", "Failed to purchase label."))
+    except Exception as e:
+        return False, str(e)
 
 
 # ==========================================
-# 🛑 LOGIN / SIGN UP WALL
+# 🛑 AUTHENTICATION WALL
 # ==========================================
 if st.session_state.user is None:
-    st.markdown(
-        "<h1 style='text-align:center;letter-spacing:6px;color:#F5A623;margin-bottom:0;'>⭐ THRIFT STAR</h1>",
-        unsafe_allow_html=True
-    )
-    st.markdown(
-        "<p style='text-align:center;color:#555;font-size:0.85rem;letter-spacing:2px;text-transform:uppercase;margin-top:0;'>Buy · Sell · Swap Streetwear</p>",
-        unsafe_allow_html=True
-    )
+    st.markdown("<h1 style='text-align:center;'>⭐ THRIFT STAR</h1>", unsafe_allow_html=True)
     if URI_VEND:
-        st.markdown(
-            f'<div class="hero-graphic"><img src="{URI_VEND}" alt="Thrift Star Vending Machine"></div>',
-            unsafe_allow_html=True
-        )
+        st.markdown(f'<div style="text-align:center;"><img src="{URI_VEND}" style="width:200px;"/></div>', unsafe_allow_html=True)
+    
     col1, col2 = st.columns(2)
     with col1:
         with st.container(border=True):
             st.subheader("Login")
-            email_login    = st.text_input("Email", key="login_email")
-            password_login = st.text_input("Password", type="password", key="login_password")
+            e_login = st.text_input("Email", key="l_e")
+            p_login = st.text_input("Password", type="password", key="l_p")
             if st.button("Sign In", type="primary"):
                 try:
-                    res = supabase.auth.sign_in_with_password({"email": email_login, "password": password_login})
-                    st.session_state.user          = res.user
-                    st.session_state.access_token  = res.session.access_token
-                    st.session_state.refresh_token = res.session.refresh_token
-                    new_device_id = str(uuid.uuid4())
-                    st.query_params["device"] = new_device_id
-                    save_session(new_device_id, res.session.access_token, res.session.refresh_token)
+                    res = supabase.auth.sign_in_with_password({"email": e_login, "password": p_login})
+                    login_user(res.session.access_token, res.session.refresh_token, res.user)
                     st.rerun()
-                except Exception:
-                    st.error("Login Failed: Please check your credentials.")
+                except Exception: st.error("Login Failed.")
     with col2:
         with st.container(border=True):
-            st.subheader("Create Account")
-            username_signup = st.text_input("Desired Username")
-            email_signup    = st.text_input("Email", key="signup_email")
-            password_signup = st.text_input("Password", type="password", key="signup_password")
-            if st.button("Sign Up"):
-                if username_signup and email_signup and password_signup:
-                    try:
-                        res = supabase.auth.sign_up({"email": email_signup, "password": password_signup})
-                        if res.user and res.session:
-                            st.session_state.user          = res.user
-                            st.session_state.access_token  = res.session.access_token
-                            st.session_state.refresh_token = res.session.refresh_token
-                            new_device_id = str(uuid.uuid4())
-                            st.query_params["device"] = new_device_id
-                            save_session(new_device_id, res.session.access_token, res.session.refresh_token)
-                            supabase.auth.set_session(res.session.access_token, res.session.refresh_token)
-                            supabase.table("users").insert({
-                                "id": res.user.id, "username": username_signup, "email": email_signup
-                            }).execute()
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Sign Up Failed: {e}")
-                else:
-                    st.error("Please fill out all fields.")
+            st.subheader("Sign Up")
+            u_signup = st.text_input("Username")
+            e_signup = st.text_input("Email", key="s_e")
+            p_signup = st.text_input("Password", type="password", key="s_p")
+            if st.button("Create Account"):
+                try:
+                    res = supabase.auth.sign_up({"email": e_signup, "password": p_signup})
+                    if res.user and res.session:
+                        login_user(res.session.access_token, res.session.refresh_token, res.user)
+                        supabase.table("users").insert({"id": res.user.id, "username": u_signup, "email": e_signup}).execute()
+                        st.rerun()
+                except Exception as e: st.error(f"Sign Up Failed: {e}")
     st.stop()
 
 
 # ==========================================
-# ✅ MAIN THRIFT STAR APP (LOGGED IN)
+# ✅ MAIN APPLICATION
 # ==========================================
 ME_ID   = st.session_state.user.id
 me_data = get_user_by_id(ME_ID)
 ME_NAME = me_data["username"] if me_data else "User"
 
-def get_my_items():
-    return supabase.table("items").select("*").eq("owner_id", ME_ID).order("id").execute().data
-
-def get_feed_items():
-    return supabase.table("items").select("*, users!inner(username)").neq("owner_id", ME_ID).eq('status', 'Available').execute().data
-
+def get_my_items(): return supabase.table("items").select("*").eq("owner_id", ME_ID).order("id").execute().data
+def get_feed_items(): return supabase.table("items").select("*, users!inner(username)").neq("owner_id", ME_ID).eq('status', 'Available').execute().data
 def get_item_by_id(item_id):
     res = supabase.table("items").select("*").eq("id", item_id).execute()
     return res.data[0] if res.data else None
+def get_cart_items(): return supabase.table("cart_items").select("*, items!inner(*, users!inner(username))").eq("user_id", ME_ID).execute().data
 
-def get_cart_items():
-    return supabase.table("cart_items").select("*, items!inner(*, users!inner(username))").eq("user_id", ME_ID).execute().data
-
-# Main header
-st.title("⭐ Thrift Star")
-st.markdown("*The premier marketplace for thrifters to buy, sell, and **SWAP**.*")
-
-# Sidebar
+# UI Page Layout
 with st.sidebar:
+    if URI_VEND: st.markdown(f'<div style="text-align:center;"><img src="{URI_VEND}" style="width:100px; opacity:0.8;"/></div>', unsafe_allow_html=True)
     st.divider()
-    if URI_VEND:
-        st.sidebar.markdown(
-            f'<div style="text-align:center;"><img src="{URI_VEND}" style="width:110px; opacity:0.9; margin-bottom:0.8rem;"/></div>',
-            unsafe_allow_html=True
-        )
-    st.divider()
-    # Side art removed (as per user request: 'remove tacky sidebar sketches')
-    pass
+    menu = ["Home Feed", "Shopping Cart", "Negotiations & Offers", "My Closet", "Purchases & Sales", "Profile & Settings"]
+    choice = st.radio("Navigation", menu)
+    st.sidebar.divider()
+    st.sidebar.markdown(f"**🟢 Online as:** `{ME_NAME}`")
+    st.sidebar.button("Log Out", on_click=logout)
 
-menu   = ["Home Feed", "Shopping Cart", "Negotiations & Offers", "My Closet", "Purchases & Sales", "Profile & Settings"]
-choice = st.sidebar.radio("Navigation", menu)
-st.sidebar.divider()
-st.sidebar.markdown(f"**🟢 Online as:** `{ME_NAME}`")
-st.sidebar.button("Log Out", on_click=logout)
+st.title("⭐ Thrift Star")
+st.markdown("*Buy · Sell · Swap Streetwear*")
 
 
-# ==========================================
-# DYNAMIC ROUTING COMPONENTS
-# ==========================================
+# --- ISOLATED ITEM PAGE ---
 def render_isolated_item_page(item):
     st.button("← Back", on_click=lambda: st.session_state.update(view_item=None))
     burger_divider()
     colA, colB = st.columns([1, 1])
     with colA:
-        if item.get('photos') and len(item['photos']) > 0:
-            for i, p_url in enumerate(item['photos']):
-                st.image(p_url, use_container_width=True, caption=f"Photo {i+1}")
-        else:
-            st.image("https://placehold.co/600x600/1A1A1C/333?text=No+Image", use_container_width=True)
+        if item.get('photos'): st.image(item['photos'][0], use_container_width=True)
+        else: st.image("https://placehold.co/600x600?text=No+Image", use_container_width=True)
     with colB:
         st.subheader(f"{item['brand']} {item['listing_title']}")
-        seller = get_user_by_id(item['owner_id'])
-        st.markdown(f"**Seller:** {seller['username'] if seller else 'Unknown'}")
-        st.markdown(f"**Size:** {item.get('size','N/A')} | **Condition:** {item.get('condition','N/A')}")
-        st.markdown(f"**Price:** ${item['price']}")
-        st.write("**Description:**")
+        st.markdown(f"**Price:** ${item['price']} | **Size:** {item.get('size','OS')}")
         st.write(item.get('description', ''))
         st.divider()
         if item['owner_id'] != ME_ID and item['status'] == 'Available':
-            act_cols = st.columns(2)
-            with act_cols[0]:
-                if st.button("Add to Cart", key=f"isocart_{item['id']}"):
-                    try:
-                        supabase.table("cart_items").insert({"user_id": ME_ID, "item_id": item['id']}).execute()
-                        st.toast("Added to cart!")
-                    except:
-                        st.toast("Already in cart.")
-            with act_cols[1]:
-                if st.button("Buy Now", key=f"isobuy_{item['id']}", type="primary"):
-                    st.session_state.checkout_item = item
-                    st.session_state.view_item     = None
-                    st.rerun()
-            with st.expander("🤝 Propose a Swap"):
-                my_items = get_my_items()
-                if not my_items:
-                    st.warning("Your closet is empty!")
-                else:
-                    item_options   = {i["listing_title"]: i for i in my_items}
-                    offer_item_name = st.selectbox("Select from your closet:", list(item_options.keys()), key=f"isoselect_{item['id']}")
-                    cash_boot       = st.number_input("Cash boot ($)?", min_value=0, value=0, step=10, key=f"isocash_{item['id']}")
-                    if st.button("Send Offer", key=f"isobtn_{item['id']}"):
-                        offered_item = item_options[offer_item_name]
-                        supabase.table("swap_proposals").insert({
-                            "original_proposer_id": ME_ID,
-                            "original_receiver_id": item["owner_id"],
-                            "item_wanted_id":        item["id"],
-                            "item_offered_id":       offered_item["id"],
-                            "cash_added":            cash_boot,
-                            "status":                "Pending",
-                            "action_with_id":        item["owner_id"]
-                        }).execute()
-                        st.toast("Swap offer sent! 🤝")
+            c1, c2 = st.columns(2)
+            if c1.button("Add to Cart"):
+                supabase.table("cart_items").insert({"user_id": ME_ID, "item_id": item['id']}).execute()
+                st.toast("Added to Cart!")
+            if c2.button("Buy Now", type="primary"):
+                st.session_state.checkout_item = item
+                st.session_state.view_item = None
+                st.rerun()
 
+# --- CHECKOUT PAGE (BUY NOW) ---
 def render_checkout_page(item):
     st.button("← Back", on_click=lambda: st.session_state.update(checkout_item=None))
     burger_divider()
-    st.subheader("Secure Checkout Tracker")
+    st.subheader("Secure Checkout")
+    
+    # 1. Fetch Shipping Rate (Locked)
+    if "c_rate" not in st.session_state or st.session_state.get("c_id") != item['id']:
+        with st.spinner("Fetching Live USPS Rate..."):
+            ok, cost, msg, rid = get_live_shipping_rate(item['owner_id'], ME_ID)
+            if ok:
+                st.session_state.c_rate = cost
+                st.session_state.c_rid = rid
+                st.session_state.c_id = item['id']
+            else:
+                st.error(msg); st.stop()
+
     col1, col2 = st.columns(2)
     with col1:
         st.image(item['photos'][0] if item.get('photos') else "https://placehold.co/400", width=250)
         st.markdown(f"**{item['brand']} {item['listing_title']}**")
-        seller = get_user_by_id(item['owner_id'])
-        st.caption(f"Seller: {seller['username'] if seller else 'Unknown'}")
-        if seller and seller.get('paypal_email'):
-            st.success("✅ Seller has a linked PayPal Account.")
-        else:
-            st.warning("⚠️ Seller has no PayPal. Escrow hold applied.")
     with col2:
         with st.container(border=True):
-            subtotal = float(item['price'])
-            app_fee  = round(subtotal * 0.10, 2)
-            total    = subtotal + app_fee
-            st.markdown("### Order Summary")
-            st.markdown(f"Subtotal: **${subtotal:.2f}**")
-            st.markdown(f"ThriftStar Fee (10%): **${app_fee:.2f}**")
-            st.divider()
-            st.markdown(f"## Total: ${total:.2f}")
-            method = st.radio("Payment Method", ["PayPal / Credit Card"])
+            sub = float(item['price'])
+            fee = round(sub * 0.10, 2)
+            shp = st.session_state.c_rate
+            tot = sub + fee + shp
+            st.markdown(f"**Subtotal:** ${sub:.2f}\n\n**App Fee:** ${fee:.2f}\n\n**Shipping:** ${shp:.2f}")
+            st.markdown(f"## Total: ${tot:.2f}")
             
-            # --- BRAINTREE DROP-IN INTEGRATION ---
-            token = get_braintree_client_token()
-            if not token:
-                st.error("Payment Gateway unreachable. Please try again later.")
-            else:
-                # Capture nonce from Query Params (Set by JS below)
-                captured_nonce = st.query_params.get("payment_nonce")
-                
-                if captured_nonce:
-                    st.success("✅ Payment Method Verified. Click 'Complete Purchase' below.")
-                    if st.button("Complete Purchase", type="primary"):
-                        addr = me_data.get('address')
-                        if not addr or not addr.get("street1"):
-                            st.error("Please add a Shipping Address in Profile & Settings first!")
-                        else:
-                            with st.spinner("Finalizing Order..."):
-                                success, txn = process_braintree_transaction(total, captured_nonce)
-                                if success:
-                                    # Cleanup nonce from URL after use
-                                    st.query_params.clear()
-                                    supabase.table("orders").insert({
-                                        "buyer_id":        ME_ID,
-                                        "seller_id":       item["owner_id"],
-                                        "item_id":         item["id"],
-                                        "amount":          total,
-                                        "braintree_txn_id": txn
-                                    }).execute()
-                                    supabase.table("items").update({"status": "Sold"}).eq("id", item["id"]).execute()
-                                    supabase.table("cart_items").delete().eq("item_id", item["id"]).execute()
-                                    st.success("HUSTLE SUCCESSFUL! Order placed. 🛍️")
-                                    st.session_state.checkout_item = None
-                                    st.rerun()
-                                else:
-                                    st.error(f"Transaction Error: {txn}")
-                else:
-                    # Render Drop-in UI
-                    from streamlit.components.v1 import html as st_html
-                    dropin_html = f"""
-                    <script src="https://js.braintreegateway.com/web/dropin/1.42.0/js/dropin.min.js"></script>
-                    <div id="dropin-container"></div>
-                    <button id="submit-button" style="background:#F5A623; color:white; border:none; padding:10px 20px; border-radius:20px; font-family:sans-serif; cursor:pointer; width:100%; font-weight:bold; margin-top:10px;">VERIFY PAYMENT METHOD</button>
-                    <script>
-                        const button = document.querySelector('#submit-button');
-                        braintree.dropin.create({{
-                            authorization: '{token}',
-                            container: '#dropin-container',
-                            paypal: {{ flow: 'vault' }}
-                        }}, (error, instance) => {{
-                            if (error) console.error(error);
-                            button.addEventListener('click', () => {{
-                                instance.requestPaymentMethod((error, payload) => {{
-                                    if (error) console.error(error);
-                                    // Hack: Post nonce back to parent via URL
-                                    const url = new URL(window.parent.location.href);
-                                    url.searchParams.set('payment_nonce', payload.nonce);
-                                    window.parent.location.href = url.href;
-                                }});
-                            }});
-                        }});
-                    </script>
-                    """
-                    st_html(dropin_html, height=450)
-                    st.caption("Verify your PayPal or Card above to enable 'Complete Purchase'.")
-
-if st.session_state.view_item is not None:
-    render_isolated_item_page(st.session_state.view_item)
-    st.stop()
-
-if st.session_state.checkout_item is not None:
-    render_checkout_page(st.session_state.checkout_item)
-    st.stop()
-
-
-# ==========================================
-# PAGE ROUTING
-# ==========================================
-
-# ---- HOME FEED ----
-if choice == "Home Feed":
-    hcol1, hcol2 = st.columns([8, 1])
-    with hcol1:
-        st.markdown("<h2 style='margin-bottom:0;'>DISCOVER STEALS</h2>", unsafe_allow_html=True)
-    with hcol2:
-        # Lighter sketch removed (as per user request)
-        pass
-    feed = get_feed_items()
-    if not feed:
-        empty_state(URI_SHOE, "The feed is empty.", "Be the first to list some heat. 👟")
-    else:
-        cols = st.columns(4)
-        for index, item in enumerate(feed):
-            with cols[index % 4]:
-                image_url = item['photos'][0] if item.get('photos') and len(item['photos']) > 0 else "https://placehold.co/400x400/1A1A1C/555?text=NO+IMAGE"
-                brand  = item.get('brand', 'UNKNOWN').upper()
-                name   = item.get('listing_title', 'Item')
-                size   = item.get('size', 'OS')
-                price  = item.get('price', 0)
-                seller = item.get('users', {}).get('username', 'Unknown') if isinstance(item.get('users'), dict) else 'Unknown'
-                st.markdown(f"""
-                <div class="grailed-card">
-                    <img src="{image_url}" alt="{brand}">
-                    <div class="card-info">
-                        <div class="card-brand">{brand}</div>
-                        <div class="card-title">{name}</div>
-                        <div class="grailed-meta" style="display:flex;justify-content:space-between;align-items:center;">
-                            <span style="font-size:0.72rem;color:#666;">{size} &bull; {seller}</span>
-                            <span class="card-price">${price}</span>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.button("Cart", key=f"cart_{item['id']}", help="Add to cart"):
-                        try:
-                            supabase.table("cart_items").insert({"user_id": ME_ID, "item_id": item['id']}).execute()
-                            st.toast(f"Added {brand} to cart!")
-                        except:
-                            st.toast("Already in cart.")
-                with c2:
-                    if st.button("View", key=f"view_{item['id']}", help="View details"):
-                        st.session_state.view_item = item
-                        st.rerun()
-                with st.expander("🤝 Swap"):
-                    my_items = get_my_items()
-                    if not my_items:
-                        st.caption("Your closet is empty.")
-                    else:
-                        item_options = {i["listing_title"]: i for i in my_items}
-                        offer_name   = st.selectbox("Offer:", list(item_options.keys()), key=f"sel_{item['id']}", label_visibility="collapsed")
-                        cash_boot    = st.number_input("+ Cash ($)", min_value=0, value=0, step=5, key=f"cash_{item['id']}")
-                        if st.button("Send Offer", key=f"btn_{item['id']}", type="primary"):
-                            offered = item_options[offer_name]
-                            supabase.table("swap_proposals").insert({
-                                "original_proposer_id": ME_ID,
-                                "original_receiver_id": item["owner_id"],
-                                "item_offered_id":      offered["id"],
-                                "item_wanted_id":       item["id"],
-                                "cash_added":           cash_boot,
-                                "status":               "Pending",
-                                "action_with_id":       item["owner_id"]
-                            }).execute()
-                            st.toast("Swap offer sent! 🤝")
-
-
-# ---- SHOPPING CART ----
-elif choice == "Shopping Cart":
-    st.markdown("<h2>YOUR CART</h2>", unsafe_allow_html=True)
-    cart_items = get_cart_items()
-    if not cart_items:
-        empty_state(URI_WOOF, "Woof! Your cart is empty.", "Go to the feed and add some steals.")
-    else:
-        subtotal_price = 0
-        for c in cart_items:
-            item = c['items']
-            subtotal_price += item['price']
-            with st.container(border=True):
-                colA, colB, colC = st.columns([1, 4, 1])
-                with colA:
-                    st.image(item['photos'][0] if item.get('photos') else "https://placehold.co/400", use_container_width=True)
-                with colB:
-                    st.markdown(f"**{item['brand']} {item['listing_title']}**")
-                    st.markdown(f"### ${item['price']}")
-                with colC:
-                    if st.button("Remove", key=f"rm_cart_{c['id']}"):
-                        supabase.table("cart_items").delete().eq("id", c['id']).execute()
-                        st.rerun()
-        burger_divider()
-        app_fee    = round(subtotal_price * 0.10, 2)
-        total_price = subtotal_price + app_fee
-        st.markdown(f"**Subtotal:** ${subtotal_price:.2f} | **ThriftStar Fee (10%):** ${app_fee:.2f}")
-        st.markdown(f"## Total: ${total_price:.2f}")
-        st.radio("Payment Method", ["PayPal Dashboard", "Credit Card"])
-        if st.button("Confirm Checkout", type="primary"):
-            addr = me_data.get('address')
-            if not addr or not addr.get("street1"):
-                st.error("Please add a Shipping Address in Profile & Settings before checking out.")
-            else:
-                with st.spinner("Authorizing..."):
-                    success, txn = process_braintree_transaction(total_price, "fake-valid-nonce")
-                    if success:
-                        for c in cart_items:
-                            item = c['items']
+            nonce = st.query_params.get("payment_nonce")
+            if nonce and st.query_params.get("payment_target") == f"item_{item['id']}":
+                st.success("Payment Verified.")
+                if st.button("Complete Purchase", type="primary"):
+                    with st.spinner("Processing..."):
+                        p_ok, p_txn = process_braintree_transaction(tot, nonce)
+                        if p_ok:
+                            l_ok, l_url = purchase_shipping_label(st.session_state.c_rid)
                             supabase.table("orders").insert({
-                                "buyer_id":        ME_ID,
-                                "seller_id":       item["owner_id"],
-                                "item_id":         item["id"],
-                                "amount":          item["price"] * 1.10,
-                                "braintree_txn_id": txn
+                                "buyer_id": ME_ID, "seller_id": item["owner_id"],
+                                "item_id": item["id"], "amount": tot,
+                                "braintree_txn_id": p_txn, "shipping_label_url": l_url if l_ok else None
                             }).execute()
                             supabase.table("items").update({"status": "Sold"}).eq("id", item["id"]).execute()
-                            supabase.table("cart_items").delete().eq("id", c['id']).execute()
-                        st.toast("Checkout Successful! 🎉")
+                            supabase.table("cart_items").delete().eq("item_id", item["id"]).execute()
+                            st.query_params.clear()
+                            st.success("Success! 🛍️")
+                            st.session_state.checkout_item = None
+                            st.rerun()
+                        else: st.error(p_txn)
+            else:
+                render_braintree_dropin(tot, f"PAY ${tot:.2f}", target_id=f"item_{item['id']}")
+
+# Global Redirects
+if st.session_state.view_item: render_isolated_item_page(st.session_state.view_item); st.stop()
+if st.session_state.checkout_item: render_checkout_page(st.session_state.checkout_item); st.stop()
+
+
+# ==========================================
+# PAGE CONTENT ROUTING
+# ==========================================
+if choice == "Home Feed":
+    st.markdown("<h2>DISCOVER HEAT</h2>", unsafe_allow_html=True)
+    feed = get_feed_items()
+    if not feed: empty_state(URI_SHOE, "No heat found.", "List something first.")
+    else:
+        cols = st.columns(4)
+        for idx, itm in enumerate(feed):
+            with cols[idx % 4]:
+                st.markdown(f"""<div class="grailed-card"><img src="{itm['photos'][0]}"><div class="card-info"><div class="card-brand">{itm['brand']}</div><div class="card-price">${itm['price']}</div></div></div>""", unsafe_allow_html=True)
+                if st.button("View Details", key=f"f_v_{itm['id']}"):
+                    st.session_state.view_item = itm; st.rerun()
+
+elif choice == "Shopping Cart":
+    st.markdown("<h2>YOUR WISHLIST</h2>", unsafe_allow_html=True)
+    st.info("Direct multi-item checkout is coming soon. For now, please use the 'Buy Now' button on individual items to ensure accurate shipping and secure payments.")
+    items = get_cart_items()
+    if not items:
+        empty_state(URI_WOOF, "Your wishlist is empty.", "Go back to the feed to find some steals.")
+    else:
+        for c in items:
+            itm = c['items']
+            with st.container(border=True):
+                col1, col2, col3 = st.columns([1, 4, 1.5])
+                with col1:
+                    st.image(itm['photos'][0] if itm.get('photos') else "https://placehold.co/400", use_container_width=True)
+                with col2:
+                    st.markdown(f"**{itm['brand']}** - {itm['listing_title']}")
+                    st.markdown(f"### ${itm['price']}")
+                with col3:
+                    if st.button("Buy Now", key=f"cart_buy_{itm['id']}", type="primary"):
+                        st.session_state.checkout_item = itm
                         st.rerun()
-                    else:
-                        st.error(f"Checkout Failed: {txn}")
+                    if st.button("Remove", key=f"cart_rm_{c['id']}"):
+                        supabase.table("cart_items").delete().eq("id", c['id']).execute()
+                        st.rerun()
 
-
-# ---- NEGOTIATIONS & OFFERS ----
 elif choice == "Negotiations & Offers":
-    hc1, hc2 = st.columns([6, 1])
-    with hc1:
-        st.markdown("<h2 style='margin-bottom:0;'>NEGOTIATIONS & OFFERS</h2>", unsafe_allow_html=True)
+    st.markdown("<h2>NEGOTIATIONS & OFFERS</h2>", unsafe_allow_html=True)
     prop_res = supabase.table("swap_proposals") \
         .select("*") \
         .or_(f"original_proposer_id.eq.{ME_ID},original_receiver_id.eq.{ME_ID}") \
         .order("updated_at", desc=True).execute()
-
+    
     if not prop_res.data:
         empty_state(URI_VEND, "No active proposals.", "Go to the feed and send a swap offer.")
     else:
         for p in prop_res.data:
             am_i_proposer = p["original_proposer_id"] == ME_ID
             other_user_id = p["original_receiver_id"] if am_i_proposer else p["original_proposer_id"]
-            is_cash_offer = p["item_offered_id"] is None
-            their_item_id = p["item_wanted_id"] if am_i_proposer else p["item_offered_id"]
-            their_item    = get_item_by_id(their_item_id) if their_item_id else None
+            is_cash_only  = p["item_offered_id"] is None
+            
+            item_wanted   = get_item_by_id(p["item_wanted_id"])
+            item_offered  = get_item_by_id(p["item_offered_id"]) if p["item_offered_id"] else None
+            
             other_user    = get_user_by_id(other_user_id)
-            other_username = other_user["username"] if other_user else "Unknown"
+            other_name    = other_user["username"] if other_user else "Unknown"
             status        = p["status"]
             status_class  = {"Accepted": "accepted", "Declined": "declined"}.get(status, "pending")
-            offer_type    = "💵 Cash Offer" if is_cash_offer else "🔄 Item Swap"
+            offer_type    = "💵 Cash Offer" if is_cash_only else "🔄 Item Swap"
 
-            # DM-style header
+            # DM Header
             st.markdown(f"""
             <div class="dm-header">
-                <div class="dm-avatar">{other_username[0].upper()}</div>
+                <div class="dm-avatar">{other_name[0].upper()}</div>
                 <div style="flex:1;">
-                    <div style="font-weight:700;font-size:0.95rem;">{other_username}</div>
+                    <div style="font-weight:700;font-size:0.95rem;">{other_name}</div>
                     <div style="font-size:0.75rem;color:#666;">{offer_type}</div>
                 </div>
                 <span class="dm-status-pill {status_class}">{status}</span>
             </div>
             """, unsafe_allow_html=True)
 
-            # Bubble thread
-            if is_cash_offer and their_item:
-                bubble_text = f"Offered <strong>${p['cash_added']}</strong> for <strong>{their_item['brand']} {their_item['listing_title']}</strong>"
-                side = "sent" if am_i_proposer else "received"
-                st.markdown(f"""
-                <div class="dm-thread">
-                    <div class="dm-bubble {side}">{bubble_text}
-                        <div class="dm-meta">{'You' if am_i_proposer else other_username}</div>
-                    </div>
-                </div>""", unsafe_allow_html=True)
-            elif their_item:
-                my_item = get_item_by_id(p["item_offered_id"] if am_i_proposer else p["item_wanted_id"])
-                bubble_sent = f"Offering <strong>{my_item['brand'] if my_item else '?'}</strong>" + (f" + ${p['cash_added']}" if p.get('cash_added') else "")
-                bubble_recv = f"for <strong>{their_item['brand']} {their_item['listing_title']}</strong>"
-                side = "sent" if am_i_proposer else "received"
-                st.markdown(f"""
-                <div class="dm-thread">
-                    <div class="dm-bubble {side}">{bubble_sent}<br>{bubble_recv}
-                        <div class="dm-meta">{'You' if am_i_proposer else other_username}</div>
-                    </div>
-                </div>""", unsafe_allow_html=True)
-
-            # Action area
-            if status == "Accepted":
-                st.success("✅ Deal closed! Generate your shipping labels below.")
-                if st.button("Generate Shipping Label", key=f"sship_{p['id']}"):
-                    s1, err = create_shipping_label(ME_ID, other_user_id)
-                    if s1: st.markdown(f"📥 **[Download Label → {other_username}]({err})**")
-                    else:  st.error(err)
-            elif status == "Declined":
-                st.error("❌ This offer was declined.")
+            # Bubble Thread
+            side = "sent" if am_i_proposer else "received"
+            if is_cash_only and item_wanted:
+                text = f"Offered <strong>${p['cash_added']}</strong> for your <strong>{item_wanted['brand']} {item_wanted['listing_title']}</strong>"
+            elif item_wanted and item_offered:
+                text = f"Offering <strong>{item_offered['brand']}</strong> + ${p['cash_added']} for your <strong>{item_wanted['brand']}</strong>"
             else:
+                text = "Offer details unavailable."
+                
+            st.markdown(f'<div class="dm-thread"><div class="dm-bubble {side}">{text}</div></div>', unsafe_allow_html=True)
+
+            # Action Area
+            if status == "Pending":
                 if p["action_with_id"] != ME_ID:
                     st.caption("Waiting for their response...")
                 else:
-                    col_a, col_b, col_c = st.columns([2, 1, 1])
+                    col_a, col_b, col_c = st.columns([1,1,1])
+                    # Counter Offer
                     with col_a:
-                        st.number_input("Counter-offer ($)", min_value=0,
-                                        value=int(p.get('cash_added') or 0),
-                                        step=5, key=f"counter_{p['id']}")
+                        new_cash = st.number_input("Counter ($)", min_value=0, value=int(p['cash_added']), key=f"counter_{p['id']}")
+                        if st.button("Send Counter", key=f"btn_c_{p['id']}"):
+                            supabase.table("swap_proposals").update({
+                                "cash_added": new_cash,
+                                "action_with_id": other_user_id,
+                                "original_proposer_id": ME_ID, 
+                                "original_receiver_id": other_user_id
+                            }).eq("id", p["id"]).execute()
+                            st.rerun()
+                    
+                    # Accept Logic (Two-Step Shipping)
                     with col_b:
-                        if st.button("Accept", key=f"acc_{p['id']}", type="primary"):
-                            addr = me_data.get('address')
-                            if not addr or not addr.get('street1'):
-                                st.error("Add Shipping Address in Settings first!")
+                        is_accepting = st.session_state.get("pending_accept_id") == p["id"]
+                        if not is_accepting:
+                            if st.button("Accept Offer", key=f"acc_{p['id']}", type="primary"):
+                                st.session_state.pending_accept_id = p["id"]
+                                st.rerun()
+                        else:
+                            st.info("Finalizing Agreement...")
+                            # 1. Fetch Shipping Rates for BOTH parties
+                            with st.spinner("Locking dual-party logistics..."):
+                                # Rate 1: Proposer -> Receiver
+                                ok1, cost1, msg1, rid1 = get_live_shipping_rate(p["original_proposer_id"], p["original_receiver_id"])
+                                # Rate 2: Receiver -> Proposer (Only if it's a swap)
+                                if not is_cash_only:
+                                    ok2, cost2, msg2, rid2 = get_live_shipping_rate(p["original_receiver_id"], p["original_proposer_id"])
+                                else:
+                                    ok2, cost2, rid2 = True, 0.0, None # Cash only, seller doesn't ship back
+
+                            if ok1 and ok2:
+                                total_fee = float(p['cash_added']) + 10.0 # Flat TS fee for swaps
+                                nonce = st.query_params.get("payment_nonce")
+                                if nonce and st.query_params.get("payment_target") == f"offer_{p['id']}":
+                                    if st.button("Confirm & Pay", key=f"pay_{p['id']}", type="primary"):
+                                        p_ok, p_txn = process_braintree_transaction(total_fee, nonce)
+                                        if p_ok:
+                                            # Buy labels
+                                            l1_ok, l1_url = purchase_shipping_label(rid1)
+                                            l2_ok, l2_url = purchase_shipping_label(rid2) if rid2 else (True, None)
+                                            
+                                            # Finalize Proposal & Orders
+                                            supabase.table("swap_proposals").update({"status": "Accepted"}).eq("id", p["id"]).execute()
+                                            
+                                            # Buy Leg
+                                            supabase.table("orders").insert({
+                                                "buyer_id": p["original_proposer_id"], "seller_id": p["original_receiver_id"],
+                                                "item_id": p["item_wanted_id"], "amount": total_fee,
+                                                "braintree_txn_id": p_txn, "shipping_label_url": l1_url
+                                            }).execute()
+                                            
+                                            # Return Leg (if swap)
+                                            if not is_cash_only:
+                                                supabase.table("orders").insert({
+                                                    "buyer_id": p["original_receiver_id"], "seller_id": p["original_proposer_id"],
+                                                    "item_id": p["item_offered_id"], "amount": 0.0,
+                                                    "braintree_txn_id": "SWAP", "shipping_label_url": l2_url
+                                                }).execute()
+                                                supabase.table("items").update({"status": "Swapped"}).eq("id", p["item_offered_id"]).execute()
+
+                                            supabase.table("items").update({"status": "Sold" if is_cash_only else "Swapped"}).eq("id", p["item_wanted_id"]).execute()
+                                            st.query_params.clear(); st.session_state.pending_accept_id = None; st.rerun()
+                                else:
+                                    render_braintree_dropin(total_fee, f"PAY ${total_fee:.2f} TO FINALIZE", target_id=f"offer_{p['id']}")
                             else:
-                                update_payload    = {"status": "Accepted", "action_with_id": None}
-                                payment_successful = True
-                                if p.get('cash_added', 0) > 0:
-                                    pay_success, pay_result = process_braintree_transaction(float(p['cash_added']), "fake-valid-nonce")
-                                    if pay_success:
-                                        update_payload["braintree_txn_id"] = pay_result
-                                    else:
-                                        st.error(f"Payment Failed: {pay_result}")
-                                        payment_successful = False
-                                if payment_successful:
-                                    supabase.table("swap_proposals").update(update_payload).eq("id", p["id"]).execute()
-                                    if is_cash_offer:
-                                        supabase.table("orders").insert({
-                                            "buyer_id":        p["original_proposer_id"],
-                                            "seller_id":       p["original_receiver_id"],
-                                            "item_id":         p["item_wanted_id"],
-                                            "amount":          p["cash_added"],
-                                            "braintree_txn_id": update_payload.get("braintree_txn_id", "Cash-Offer")
-                                        }).execute()
-                                        supabase.table("items").update({"status": "Sold"}).eq("id", p["item_wanted_id"]).execute()
-                                    else:
-                                        # Leg A: Proposer receives Receiver's item
-                                        supabase.table("orders").insert({
-                                            "buyer_id":        p["original_proposer_id"],
-                                            "seller_id":       p["original_receiver_id"],
-                                            "item_id":         p["item_wanted_id"],
-                                            "amount":          p.get("cash_added", 0),
-                                            "braintree_txn_id": update_payload.get("braintree_txn_id", "Swap-Leg-A")
-                                        }).execute()
-                                        # Leg B: Receiver gets Proposer's item
-                                        supabase.table("orders").insert({
-                                            "buyer_id":        p["original_receiver_id"],
-                                            "seller_id":       p["original_proposer_id"],
-                                            "item_id":         p["item_offered_id"],
-                                            "amount":          0,
-                                            "braintree_txn_id": "Swap-Leg-B"
-                                        }).execute()
-                                        supabase.table("items").update({"status": "Swapped"}).eq("id", p["item_wanted_id"]).execute()
-                                        supabase.table("items").update({"status": "Swapped"}).eq("id", p["item_offered_id"]).execute()
-                                    st.toast("Deal done! 🤝 Generate your shipping labels.")
-                                    st.rerun()
+                                st.error(f"Logistics Error: {msg1 if not ok1 else msg2}")
+
                     with col_c:
                         if st.button("Decline", key=f"dec_{p['id']}"):
                             supabase.table("swap_proposals").update({"status": "Declined"}).eq("id", p["id"]).execute()
-                            st.toast("Offer declined.")
                             st.rerun()
+            elif status == "Accepted":
+                st.success("🤝 Deal Finalized. Labels available in Purchases & Sales.")
             st.divider()
 
-
-# ---- MY CLOSET ----
 elif choice == "My Closet":
     st.markdown("<h2>MY CLOSET</h2>", unsafe_allow_html=True)
     my_items = get_my_items()
@@ -1110,132 +672,65 @@ elif choice == "My Closet":
         empty_state(URI_VEND, "Your closet is bare.", "List some items to start swapping.")
     else:
         closet_cols = st.columns(4)
-        for index, item in enumerate(my_items):
-            with closet_cols[index % 4]:
-                image_url = item['photos'][0] if item.get('photos') and len(item['photos']) > 0 else "https://placehold.co/400x400/1A1A1C/555?text=NO+IMAGE"
-                status_color = {"Available": "#00C864", "Sold": "#FF3C3C", "Swapped": "#F5A623"}.get(item.get('status',''), '#888')
-                st.markdown(f"""
-                <div class="grailed-card">
-                    <img src="{image_url}" alt="{item['brand']}">
-                    <div class="card-info">
-                        <div class="card-brand">{item['brand'].upper()}</div>
-                        <div class="card-title">{item['listing_title']}</div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;">
-                            <span class="card-price">${item['price']}</span>
-                            <span style="font-size:0.7rem;color:{status_color};">{item.get('status','')}</span>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button("View / Edit", key=f"cview_{item['id']}"):
-                    st.session_state.view_item = item
-                    st.rerun()
+        for idx, item in enumerate(my_items):
+            with closet_cols[idx % 4]:
+                st.markdown(f"""<div class="grailed-card"><img src="{item['photos'][0] if item.get('photos') else 'https://placehold.co/400'}"><div class="card-info"><div class="card-brand">{item['brand']}</div><div class="card-price">${item['price']}</div></div></div>""", unsafe_allow_html=True)
+                if st.button("View / Edit", key=f"c_v_{item['id']}"):
+                    st.session_state.view_item = item; st.rerun()
 
     burger_divider()
-    st.markdown("<h2>ADD NEW ITEM</h2>", unsafe_allow_html=True)
+    st.markdown("### Add New Item")
     with st.form("add_item"):
         col1, col2 = st.columns(2)
         with col1:
             brand     = st.text_input("Brand")
-            name      = st.text_input("Listing Title")
+            title     = st.text_input("Listing Title")
             category  = st.selectbox("Category", ["Tops", "Bottoms", "Outerwear", "Sneakers", "Accessories", "Other"])
             size      = st.text_input("Size")
-            price     = st.number_input("Estimated Value ($)", min_value=1.0)
+            price     = st.number_input("Estimated Value ($)", min_value=1)
             condition = st.selectbox("Condition", ['New', 'Gently Used', 'Used', 'Very Worn'])
         with col2:
-            uploaded_files = st.file_uploader("Upload Photos (Max 5)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-            desc = st.text_area("Description")
+            files = st.file_uploader("Upload Photos", accept_multiple_files=True)
+            desc  = st.text_area("Description")
+        
         if st.form_submit_button("List Item"):
-            if brand and name:
-                image_urls = []
-                if uploaded_files:
-                    for f in uploaded_files:
-                        ext   = f.name.split(".")[-1]
-                        fname = f"{uuid.uuid4()}.{ext}"
+            if brand and title:
+                urls = []
+                if files:
+                    for f in files:
                         try:
-                            s3_client.put_object(
-                                Bucket=S3_BUCKET, Key=fname,
-                                Body=f.getvalue(),
-                                ContentType=f.type
-                            )
-                            image_urls.append(f"{url}/storage/v1/object/public/{S3_BUCKET}/{fname}")
-                        except Exception as e:
-                            st.error(f"S3 Error: {e}")
-                            st.stop()
-                try:
-                    res = supabase.table("items").insert({
-                        "owner_id": ME_ID, "brand": brand, "listing_title": name,
-                        "category": category, "size": size, "price": price,
-                        "condition": condition, "description": desc, "photos": image_urls
-                    }).execute()
-                    if res.data:
-                        st.toast("Item listed! 🎉")
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Database Error: {e}")
+                            img = Image.open(f)
+                            if img.mode != 'RGB': img = img.convert('RGB')
+                            img.thumbnail((800, 800), Image.Resampling.LANCZOS)
+                            buf = io.BytesIO()
+                            img.save(buf, format='JPEG', quality=82)
+                            fname = f"{uuid.uuid4()}.jpg"
+                            s3_client.put_object(Bucket=S3_BUCKET, Key=fname, Body=buf.getvalue(), ContentType='image/jpeg')
+                            urls.append(f"{url}/storage/v1/object/public/{S3_BUCKET}/{fname}")
+                        except Exception as e: st.error(f"Image Error: {e}")
+                
+                supabase.table("items").insert({
+                    "owner_id": ME_ID, "brand": brand, "listing_title": title, 
+                    "price": price, "photos": urls, "category": category, 
+                    "size": size, "condition": condition, "description": desc
+                }).execute()
+                st.toast("Item Listed! 🎉"); st.rerun()
 
-
-# ---- PURCHASES & SALES ----
 elif choice == "Purchases & Sales":
-    st.markdown("<h2>ORDER HISTORY & SHIPPING</h2>", unsafe_allow_html=True)
-    orders_res = supabase.table("orders") \
-        .select("*, items!inner(*), buyer:users!orders_buyer_id_fkey(*), seller:users!orders_seller_id_fkey(*)") \
-        .or_(f"buyer_id.eq.{ME_ID},seller_id.eq.{ME_ID}") \
-        .order("created_at", desc=True).execute()
-    orders = orders_res.data
-    if not orders:
-        empty_state(URI_VEND, "No sales or purchases yet.", "Time to get hustling.")
-    else:
-        for o in orders:
-            item       = o['items']
-            im_buyer   = o['buyer_id'] == ME_ID
-            role       = "BUYER" if im_buyer else "SELLER"
-            other_name = o['seller']['username'] if im_buyer else o['buyer']['username']
-            with st.container(border=True):
-                st.markdown(f"**[{role}]** {item['brand']} {item['listing_title']} — **${o['amount']}**")
-                st.caption(f"Order ID: {o['id']} | Txn: {o.get('braintree_txn_id','')}")
-                if st.button("Generate Shipping Label", key=f"label_{o['id']}"):
-                    with st.spinner("Generating USPS Label..."):
-                        success, label_or_err = create_shipping_label(o['seller']['id'], o['buyer']['id'])
-                        if success:
-                            st.markdown(f"📥 **[Download USPS Shipping Label PDF]({label_or_err})**")
-                        else:
-                            st.error(f"Shippo Error: {label_or_err}")
+    st.markdown("<h2>HISTORY</h2>", unsafe_allow_html=True)
+    res = supabase.table("orders").select("*, items(*)").or_(f"buyer_id.eq.{ME_ID},seller_id.eq.{ME_ID}").execute()
+    for o in res.data:
+        st.markdown(f"Order #{o['id']} - **{o.get('items',{}).get('listing_title','Deleted Item')}**")
+        if o.get('shipping_label_url'): st.markdown(f"[Download Label]({o['shipping_label_url']})")
 
-
-# ---- PROFILE & SETTINGS ----
 elif choice == "Profile & Settings":
-    st.markdown("<h2>PROFILE & SETTINGS</h2>", unsafe_allow_html=True)
-    st.info("Addresses saved here are piped directly to the Shippo Logistics API for all live transactions.")
-    burger_divider()
-    with st.form("profile_form"):
-        st.write("### Public Profile")
-        new_name = st.text_input("Full Name",  value=me_data.get('full_name', '') if me_data else '')
-        new_bio  = st.text_area("Bio",         value=me_data.get('bio', '')       if me_data else '')
-
-        st.write("### Private Shipping & Contact Details")
-        addr = (me_data.get('address') or {}) if me_data else {}
-        c1, c2 = st.columns(2)
-        with c1:
-            street   = st.text_input("Street Address", value=addr.get('street1', ''))
-            city     = st.text_input("City",            value=addr.get('city', ''))
-        with c2:
-            state    = st.text_input("State",           value=addr.get('state', ''))
-            zip_code = st.text_input("ZIP Code",        value=addr.get('zip', ''))
-        phone      = st.text_input("Phone Number",      value=addr.get('phone', ''))
-        new_paypal = st.text_input("PayPal Email (For Payouts)", value=me_data.get('paypal_email', '') if me_data else '')
-
-        if st.form_submit_button("Save Profile"):
-            supabase.table("users").update({
-                "full_name":    new_name,
-                "bio":          new_bio,
-                "paypal_email": new_paypal,
-                "address": {
-                    "street1": street,
-                    "city":    city,
-                    "state":   state,
-                    "zip":     zip_code,
-                    "phone":   phone
-                }
-            }).eq("id", ME_ID).execute()
-            st.toast("Profile updated! ✅")
+    st.markdown("<h2>PROFILE</h2>", unsafe_allow_html=True)
+    with st.form("p"):
+        addr = me_data.get('address') or {}
+        st1 = st.text_input("Street", value=addr.get('street1',''))
+        cty = st.text_input("City", value=addr.get('city',''))
+        st_ = st.text_input("State", value=addr.get('state',''))
+        zip_ = st.text_input("Zip", value=addr.get('zip',''))
+        if st.form_submit_button("Save"):
+            supabase.table("users").update({"address": {"street1":st1, "city":cty, "state":st_, "zip":zip_}}).eq("id", ME_ID).execute()
+            st.toast("Saved!")
