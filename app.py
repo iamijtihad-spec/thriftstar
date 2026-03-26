@@ -21,7 +21,12 @@ def get_secret(key):
         return os.getenv(key)
 
 # Set page config FIRST — Streamlit Cloud requires this before any other st.* calls
-st.set_page_config(page_title="Thrift Star", layout="wide", page_icon="⭐")
+st.set_page_config(
+    page_title="Thrift Star",
+    layout="wide",
+    page_icon="icon.png",
+    initial_sidebar_state="expanded"
+)
 
 # Initialize Supabase
 url = get_secret("SUPABASE_URL")
@@ -60,7 +65,176 @@ except Exception as e:
 SHIPPO_API_KEY = get_secret("SHIPPO_API_KEY")
 shippo_configured = bool(SHIPPO_API_KEY)
 
-# --- PERSISTENT AUTHENTICATION ENGINE ---
+# --- PREMIUM UI DESIGN SYSTEM ---
+st.markdown("""
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   THRIFT STAR — PREMIUM DARK DESIGN SYSTEM
+   Palette: #0D0D0F bg | #F5A623 gold | #F0F0F0 text | #1A1A1C card
+============================================================ */
+
+/* Base */
+html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
+    background-color: #0D0D0F !important;
+    color: #F0F0F0 !important;
+    font-family: 'Inter', sans-serif !important;
+}
+[data-testid="stMain"] { background-color: #0D0D0F !important; }
+[data-testid="block-container"] { padding-top: 1.5rem !important; }
+
+/* Hide Streamlit chrome */
+#MainMenu, footer, [data-testid="stToolbar"],
+[data-testid="stDecoration"], [data-testid="stStatusWidget"],
+header[data-testid="stHeader"] { visibility: hidden !important; height: 0 !important; }
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: #111114 !important;
+    border-right: 1px solid #2A2A30 !important;
+}
+[data-testid="stSidebar"] * { color: #F0F0F0 !important; }
+[data-testid="stSidebar"] .stRadio label {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+    padding: 0.35rem 0 !important;
+    transition: color 0.2s;
+}
+[data-testid="stSidebar"] .stRadio label:hover { color: #F5A623 !important; }
+[data-testid="stSidebar"] hr { border-color: #2A2A30 !important; }
+
+/* Headings */
+h1 { font-family: 'Bebas Neue', sans-serif !important; font-size: 2.8rem !important;
+     letter-spacing: 3px !important; color: #F5A623 !important; }
+h2 { font-family: 'Bebas Neue', sans-serif !important; letter-spacing: 2px !important;
+     color: #F0F0F0 !important; }
+h3 { font-family: 'Inter', sans-serif !important; font-weight: 700 !important;
+     color: #F0F0F0 !important; }
+p, li, label, span { color: #C8C8C8 !important; }
+
+/* Cards (st.container with border) */
+[data-testid="stVerticalBlockBorderWrapper"] > div {
+    background: rgba(26, 26, 28, 0.85) !important;
+    border: 1px solid #2A2A30 !important;
+    border-radius: 14px !important;
+    padding: 1rem !important;
+    backdrop-filter: blur(12px) !important;
+    transition: border-color 0.25s, box-shadow 0.25s !important;
+}
+[data-testid="stVerticalBlockBorderWrapper"] > div:hover {
+    border-color: #F5A623 !important;
+    box-shadow: 0 0 18px rgba(245, 166, 35, 0.18) !important;
+}
+
+/* Buttons */
+.stButton > button {
+    background: #1A1A1C !important;
+    color: #F0F0F0 !important;
+    border: 1px solid #3A3A40 !important;
+    border-radius: 999px !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.83rem !important;
+    padding: 0.45rem 1.2rem !important;
+    transition: all 0.2s ease !important;
+    letter-spacing: 0.3px !important;
+}
+.stButton > button:hover {
+    background: #F5A623 !important;
+    color: #0D0D0F !important;
+    border-color: #F5A623 !important;
+    box-shadow: 0 4px 20px rgba(245,166,35,0.35) !important;
+    transform: translateY(-1px) !important;
+}
+/* Primary buttons */
+.stButton > button[kind="primary"] {
+    background: #F5A623 !important;
+    color: #0D0D0F !important;
+    border-color: #F5A623 !important;
+    font-weight: 700 !important;
+}
+.stButton > button[kind="primary"]:hover {
+    background: #FFB83E !important;
+    box-shadow: 0 6px 24px rgba(245,166,35,0.5) !important;
+}
+
+/* Inputs */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stNumberInput > div > div > input,
+.stSelectbox > div > div {
+    background: #1A1A1C !important;
+    color: #F0F0F0 !important;
+    border: 1px solid #2A2A30 !important;
+    border-radius: 10px !important;
+    font-family: 'Inter', sans-serif !important;
+}
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus {
+    border-color: #F5A623 !important;
+    box-shadow: 0 0 0 2px rgba(245,166,35,0.2) !important;
+}
+.stSelectbox > div > div { color: #F0F0F0 !important; }
+.stSelectbox svg { fill: #F5A623 !important; }
+[data-baseweb="popover"] { background: #1A1A1C !important; border: 1px solid #2A2A30 !important; }
+[role="option"] { color: #F0F0F0 !important; background: #1A1A1C !important; }
+[role="option"]:hover { background: #2A2A30 !important; }
+
+/* Labels */
+.stTextInput label, .stTextArea label, .stNumberInput label,
+.stSelectbox label, .stRadio label { color: #888 !important; font-size: 0.8rem !important;
+    font-weight: 500 !important; letter-spacing: 0.5px !important; text-transform: uppercase !important; }
+
+/* Radio buttons */
+.stRadio div[role="radiogroup"] { gap: 0.4rem !important; }
+
+/* Alerts */
+[data-testid="stAlert"] {
+    border-radius: 10px !important;
+    border-left-width: 3px !important;
+    background: rgba(26,26,28,0.9) !important;
+}
+
+/* Divider */
+hr { border-color: #2A2A30 !important; }
+
+/* Expander */
+details {
+    background: #111114 !important;
+    border: 1px solid #2A2A30 !important;
+    border-radius: 10px !important;
+    padding: 0.5rem 1rem !important;
+}
+details summary { color: #F5A623 !important; font-weight: 600 !important; }
+
+/* Spinner */
+[data-testid="stSpinner"] > div { border-top-color: #F5A623 !important; }
+
+/* Metric */
+[data-testid="stMetric"] label { color: #888 !important; }
+[data-testid="stMetric"] [data-testid="stMetricValue"] { color: #F5A623 !important; font-family: 'Bebas Neue' !important; font-size: 2rem !important; }
+
+/* Images */
+[data-testid="stImage"] img { border-radius: 10px !important; }
+
+/* Form submit button */
+.stForm [data-testid="stFormSubmitButton"] > button {
+    background: #F5A623 !important; color: #0D0D0F !important; 
+    border-color: #F5A623 !important; font-weight: 700 !important; width: 100% !important;
+}
+
+/* Caption */
+.stCaption { color: #666 !important; font-size: 0.75rem !important; }
+
+/* File uploader */
+[data-testid="stFileUploaderDropzone"] {
+    background: #1A1A1C !important; border: 1px dashed #2A2A30 !important; border-radius: 10px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 if 'user' not in st.session_state:
     st.session_state.user = None
 if 'access_token' not in st.session_state:
