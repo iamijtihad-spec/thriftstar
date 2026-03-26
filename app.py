@@ -234,6 +234,8 @@ def login_user(access_token, refresh_token, user):
     st.session_state.refresh_token = refresh_token
     cookie_manager.set("ts_access_token", access_token, max_age=604800) # 7 days
     cookie_manager.set("ts_refresh_token", refresh_token, max_age=604800)
+    import time
+    time.sleep(0.5) # Allow browser a moment to store cookies
 
 def logout():
     try: 
@@ -247,6 +249,8 @@ def logout():
     st.session_state.refresh_token = None
     st.session_state.checkout_item = None
     st.session_state.view_item = None
+    import time
+    time.sleep(0.5)
     st.rerun()
 
 def get_user_by_id(user_id):
@@ -355,6 +359,17 @@ def purchase_shipping_label(rate_id):
 # 🛑 AUTHENTICATION WALL
 # ==========================================
 if st.session_state.user is None:
+    # Handle initial cookie load delay
+    if "session_warmed" not in st.session_state:
+        st.session_state.session_warmed = False
+    
+    if not st.session_state.session_warmed:
+        with st.spinner("⭐ Restoring your session..."):
+            import time
+            time.sleep(0.6)
+            st.session_state.session_warmed = True
+            st.rerun()
+
     st.markdown("<h1 style='text-align:center;'>⭐ THRIFT STAR</h1>", unsafe_allow_html=True)
     if URI_VEND:
         st.markdown(f'<div style="text-align:center;"><img src="{URI_VEND}" style="width:200px;"/></div>', unsafe_allow_html=True)
